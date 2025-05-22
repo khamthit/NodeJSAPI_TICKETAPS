@@ -10,5 +10,7 @@ router.post("/TicketCategory/UpdateTicketCategory", TicketController.updateTicke
 router.post("/TicketCategory/DeleteTicketCategory", TicketController.deleteTicketCategory);
 router.get("/Priority/GETALL", PriorityController.showPriority);
 router.post("/Priority/NewPriority", PriorityController.createPriority);
+router.post("/Priority/UpdatePriority", PriorityController.updatePriority);
+router.post("/Priority/DeletePriority", PriorityController.deletePriority);
 
 export default router;
