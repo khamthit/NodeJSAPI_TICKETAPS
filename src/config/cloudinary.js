@@ -1,10 +1,12 @@
 import cloudinary from "cloudinary";
-import Jimp from "jimp";
+// import * as Jimp from 'jimp';
+import Jimp from 'jimp'; 
 import path from "path";
 import sharp from "sharp";
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 // Configuration
 cloudinary.config({
   cloud_name: "dvp8eh8cx",
@@ -35,8 +37,9 @@ const UploadImageToCloud = async (files, oldImage) => {
 const UploadImageToServer = async (files) => {
   try {
     const imgBuffer = Buffer.from(files, "base64");
-    const imgName = "IMG_" + Date.now() + ".png";
+    const imgName = "IMG_" + Date.now() + ".png"; 
     const imgPath = `${__dirname}/../../assets/images/${imgName}`;
+    console.log("imagePath", imgPath);
     const pngBuffer = await sharp(imgBuffer).toBuffer();
     const image = await Jimp.read(pngBuffer);
     if (!image) {
@@ -45,8 +48,9 @@ const UploadImageToServer = async (files) => {
     image.write(imgPath);
     return imgName;
   } catch (error) {
-    console.log(error);
+    console.log("uploadimagetoserver error :", error);
     return "";
   }
 };
+
 export { UploadImageToCloud,UploadImageToServer };

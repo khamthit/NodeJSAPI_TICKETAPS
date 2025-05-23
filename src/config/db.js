@@ -15,8 +15,8 @@ const pool = new Pool({
   password: PASSWORD_DATABASE, // Use the imported variable
   port: PORT_DATABASE, // Use the imported variable
   max: 50, // Maximum number of clients in the pool
-  idleTimeoutMillis: 300000, // How long a client is allowed to remain idle before being closed
-  connectionTimeoutMillis: 20000, // How long to wait for a connection to be established
+  idleTimeoutMillis: 500000, // How long a client is allowed to remain idle before being closed
+  connectionTimeoutMillis: 50000, // How long to wait for a connection to be established
   // ssl: false, // Set to true or an object if you need SSL, e.g., { rejectUnauthorized: false } for self-signed certs
 });
 
