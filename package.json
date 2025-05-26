@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "build": "babel src -d dist"
   },
   "keywords": [
     "ticket",
@@ -32,10 +33,14 @@
     "multer": "^2.0.0",
     "nodemailer": "^7.0.3",
     "pg": "^8.16.0",
+    "pm2": "^6.0.6",
     "sequelize": "^6.37.7",
     "sharp": "^0.34.2"
   },
   "devDependencies": {
+    "@babel/cli": "^7.27.2",
+    "@babel/core": "^7.27.1",
+    "@babel/preset-env": "^7.27.2",
     "nodemon": "^3.1.10"
   }
 }

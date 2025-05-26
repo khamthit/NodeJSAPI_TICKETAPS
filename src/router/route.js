@@ -40,6 +40,9 @@ router.post("/TicketCategory/DeleteTicketCategory", TicketController.deleteTicke
 
 router.post("/Ticket/Newticketdetails", TicketController.createticketdetail);
 router.get("/Ticket/GETticketDetails", TicketController.showticketDetails);
+router.post("/Ticket/UpdateStatusTicketDetails", TicketController.ticketchangestatus);
+router.post("/Ticket/TicketDetailsReassign", TicketController.ticketdetailsreassign);
+router.post("/Ticket/OpenImage", TicketController.openImage);
 
 router.get("/Priority/GETALL", PriorityController.showPriority);
 router.post("/Priority/NewPriority", PriorityController.createPriority);
