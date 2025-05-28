@@ -30,7 +30,7 @@ export default class TicketController {
   static async showTicketCategory(req, res) {
     const {
       username,
-      setTokkenkey,
+      setTokenkey,
       searchtext = ""
     } = req.query;
     let {
@@ -68,7 +68,7 @@ export default class TicketController {
         if (!result.rows || result.rows.length === 0) {
           return SendError(res, 404, EMessage.NotFound + " No ticket categories found");
         }
-        if (setTokkenkey === tokenkey) {
+        if (setTokenkey === tokenkey) {
           const trimmedResult = result.rows.map(row => {
             return {
               ...row,
@@ -93,13 +93,13 @@ export default class TicketController {
   static async createTicketCategory(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       code,
       categoryname
     } = req.body;
-    if (!username || !setTokkenkey || !code || !categoryname) {
+    if (!username || !setTokenkey || !code || !categoryname) {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
@@ -107,7 +107,7 @@ export default class TicketController {
       if (!tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 
@@ -142,14 +142,14 @@ export default class TicketController {
   static async updateTicketCategory(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       tcid,
       code,
       categoryname
     } = req.body;
-    if (!username || !setTokkenkey || !tcid || !code || !categoryname) {
+    if (!username || !setTokenkey || !tcid || !code || !categoryname) {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
@@ -157,7 +157,7 @@ export default class TicketController {
       if (!tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
       const validationErrors = ValidateData({
@@ -182,12 +182,12 @@ export default class TicketController {
   static async deleteTicketCategory(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       tcid
     } = req.body;
-    if (!username || !setTokkenkey || !tcid) {
+    if (!username || !setTokenkey || !tcid) {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
@@ -195,7 +195,7 @@ export default class TicketController {
       if (!tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
       const sqlQuery = "UPDATE ticketcategory SET active = 'N' WHERE tcid = $1";
@@ -213,7 +213,7 @@ export default class TicketController {
   static async createticketdetail(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       subject,
@@ -223,7 +223,7 @@ export default class TicketController {
       descriptions
     } = req.body;
     // Comprehensive check for required fields
-    if (!username || !setTokkenkey || !subject || !email || !tcid || !ptid || !descriptions) {
+    if (!username || !setTokenkey || !subject || !email || !tcid || !ptid || !descriptions) {
       // If a file was uploaded despite missing fields, attempt to clean it up.
       return SendError400(res, "Missing required fields in request query or body.");
     }
@@ -232,7 +232,7 @@ export default class TicketController {
       if (!tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
       //image
@@ -275,7 +275,7 @@ export default class TicketController {
   static async showticketDetails(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       page = 1,
@@ -286,7 +286,7 @@ export default class TicketController {
       search_startdate = "",
       search_enddate = ""
     } = req.query;
-    if (!username || !setTokkenkey) {
+    if (!username || !setTokenkey) {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
@@ -294,7 +294,7 @@ export default class TicketController {
       if (!tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
       const offset = (page - 1) * limit;

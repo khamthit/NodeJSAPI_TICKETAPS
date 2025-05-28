@@ -33,7 +33,7 @@ export default class PriorityController {
   }
 
   static async showPriority(req, res) {
-    const { username, setTokkenkey, searchtext = "" } = req.query;
+    const { username, setTokenkey, searchtext = "" } = req.query;
     let { page = 1, limit = 10 } = req.query;
 
     if (!username) {
@@ -56,7 +56,7 @@ export default class PriorityController {
         );
       }
       //this is check tokenkey
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(
           res,
           401,
@@ -102,7 +102,7 @@ export default class PriorityController {
   }
 
   static async createPriority(req, res) {
-    const { username, setTokkenkey } = req.query;
+    const { username, setTokenkey } = req.query;
     const { code, priority } = req.body;
 
     if (!username) {
@@ -119,7 +119,7 @@ export default class PriorityController {
         );
       }
 
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 
@@ -168,7 +168,7 @@ export default class PriorityController {
   }
 
   static async updatePriority(req, res) {
-    const { username, setTokkenkey } = req.query;
+    const { username, setTokenkey } = req.query;
     const { ptid, code, priority } = req.body;
 
     if (!username) {
@@ -185,7 +185,7 @@ export default class PriorityController {
         );
       }
       //this is check tokenkey
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 
@@ -233,7 +233,7 @@ export default class PriorityController {
   }
 
   static async deletePriority(req, res) {
-    const { username, setTokkenkey } = req.query;
+    const { username, setTokenkey } = req.query;
     const { ptid } = req.body;
 
     if (!username) {
@@ -250,7 +250,7 @@ export default class PriorityController {
         );
       }
       //this is check tokenkey
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 

@@ -5,6 +5,7 @@ import PriorityController from "../controller/priority.controller.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import GroupAirlineController from "../controller/groupairline.controller.js";
 
 const router = express.Router();
 const app = express();
@@ -37,16 +38,23 @@ router.get("/TicketCategory/GETALL", TicketController.showTicketCategory);
 router.post("/TicketCategory/NewTicketCategory", TicketController.createTicketCategory);
 router.post("/TicketCategory/UpdateTicketCategory", TicketController.updateTicketCategory);
 router.post("/TicketCategory/DeleteTicketCategory", TicketController.deleteTicketCategory);
-
 router.post("/Ticket/Newticketdetails", TicketController.createticketdetail);
 router.get("/Ticket/GETticketDetails", TicketController.showticketDetails);
 router.post("/Ticket/UpdateStatusTicketDetails", TicketController.ticketchangestatus);
 router.post("/Ticket/TicketDetailsReassign", TicketController.ticketdetailsreassign);
 router.post("/Ticket/OpenImage", TicketController.openImage);
-
 router.get("/Priority/GETALL", PriorityController.showPriority);
 router.post("/Priority/NewPriority", PriorityController.createPriority);
 router.post("/Priority/UpdatePriority", PriorityController.updatePriority);
 router.post("/Priority/DeletePriority", PriorityController.deletePriority);
+router.get("/GroupAirline/GETALL", GroupAirlineController.showgroupline);
+router.post("/GroupAirline/NewGroupAirline", GroupAirlineController.creategroupline);
+router.post("/GroupAirline/DeleteGroupAirline", GroupAirlineController.deletegroupline);
+router.post("/GroupAirline/UpdateGroupAirline", GroupAirlineController.updategroupline);
+router.post("/GroupAirLine/NewGroupAirLineDetails", GroupAirlineController.newairlinedetails);
+router.get("/GroupAirline/GETGroupAirlineDetails", GroupAirlineController.showairlinedetails);
+router.post("/GroupAirline/UpdateGroupAirlineDetails", GroupAirlineController.updategroupairlinedetails);
+router.post("/GroupAirline/DeleteGroupAirlineDetails", GroupAirlineController.deletegroupairlinedetails);
+
 
 export default router;

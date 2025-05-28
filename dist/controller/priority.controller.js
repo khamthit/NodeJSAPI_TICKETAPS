@@ -27,7 +27,7 @@ export default class PriorityController {
   static async showPriority(req, res) {
     const {
       username,
-      setTokkenkey,
+      setTokenkey,
       searchtext = ""
     } = req.query;
     let {
@@ -47,7 +47,7 @@ export default class PriorityController {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
       //this is check tokenkey
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
       const offset = (page - 1) * limit;
@@ -81,7 +81,7 @@ export default class PriorityController {
   static async createPriority(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       code,
@@ -95,7 +95,7 @@ export default class PriorityController {
       if (!tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 
@@ -131,7 +131,7 @@ export default class PriorityController {
   static async updatePriority(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       ptid,
@@ -147,7 +147,7 @@ export default class PriorityController {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
       //this is check tokenkey
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
       const validationErrors = ValidateData({
@@ -183,7 +183,7 @@ export default class PriorityController {
   static async deletePriority(req, res) {
     const {
       username,
-      setTokkenkey
+      setTokenkey
     } = req.query;
     const {
       ptid
@@ -197,7 +197,7 @@ export default class PriorityController {
         return SendError(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
       }
       //this is check tokenkey
-      if (setTokkenkey !== tokenkey) {
+      if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 

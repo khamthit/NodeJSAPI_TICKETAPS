@@ -13,8 +13,8 @@ module.exports = {
       PORT: 3001
     }
   }, {
-    name   : "my-backend-api",
-    script : "./backend/server.js",
+    name   : "ticketaps",
+    script : "./src/server.js",
     instances : "max", // Use all available CPU cores
     exec_mode : "cluster",
     watch     : true,
