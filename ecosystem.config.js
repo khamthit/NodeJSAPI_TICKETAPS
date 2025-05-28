@@ -14,7 +14,7 @@ module.exports = {
     }
   }, {
     name   : "ticketaps",
-    script : "./src/server.js",
+    script : "./src/serverticket.js",
     instances : "max", // Use all available CPU cores
     exec_mode : "cluster",
     watch     : true,

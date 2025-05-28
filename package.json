@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node src/server.js",
-    "start": "node src/server.js",
+    "dev": "node src/serverticket.js",
+    "start": "node src/serverticket.js",
     "build": "babel src -d dist"
   },
   "keywords": [
