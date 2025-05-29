@@ -48,6 +48,9 @@ router.post("/Ticket/NewStatus", TicketController.createsystemstatus);
 router.post("/Ticket/UpdateStatus", TicketController.updatesystemstatus);
 router.post("/Ticket/DeleteStatus", TicketController.deletesystemstatus);
 router.get("/Ticket/GetAllStatus", TicketController.showSystemStatus);
+router.get("/Ticket/GetTicketDeailByUser", TicketController.showticketDetailsByClient);
+router.post("/Ticket/NewTicketDetailChateNote", TicketController.newticketdetailchatnote);
+router.get("/Ticket/GetTicketDetailChatNote", TicketController.showticketdetailschatnote);
 
 router.get("/Priority/GetAllPriority", PriorityController.showPriority);
 router.post("/Priority/NewPriority", PriorityController.createPriority);
@@ -65,5 +68,9 @@ router.get("/Announcement/GetAllTargetaudience", AnnoucementController.showannou
 router.post("/Announcement/NewTargetaudience", AnnoucementController.newtargetaudience);
 router.post("/Announcement/DeleteTargetaudience", AnnoucementController.deletetargetaudience);
 router.post("/Announcement/UpdateTargetaudience", AnnoucementController.updatetargetaudience);
+router.get("/Announcement/GetAnnouncementStatus", AnnoucementController.showannouncementStatus);
+router.post("/Announcement/NewAnnouncementStatus", AnnoucementController.createannouncementstatus);
+router.post("/Announcement/UpdateAnnouncementStatus", AnnoucementController.updateannouncementstatus);
+router.post("/Announcement/DeleteAnnouncementStatus", AnnoucementController.deleteannouncementstatus);
 
 export default router;

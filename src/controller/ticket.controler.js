@@ -516,58 +516,66 @@ export default class TicketController {
             EMessage.NotFound + " No ticket details found"
           );
         }
-        const trimmedResult = result.rows.map((row) => {
-          const {
-            ticketid,
-            ticket_code,
-            category_code,
-            category_categoryname,
-            priority_code,
-            priority_name,
-            fileattach,
-            ticketstatus,
-            workerby,
-            workernote,
-            workerstart,
-            workerend,
-            reassingby,
-            reassingbynode,
-            reassingdate,
-            createdate,
-            createby,
-            ...rest
-          } = row;
-          return {
-            // ...row,
-            ...rest,
-            tcddid: row.tcddid, // Assuming tcid does not need trimming or is not a string
-            ticketId: row.ticketid,
-            ticketCode: row.ticketcode?.trim(),
-            subject: row.subject?.trim(),
-            descriptions: row.descriptions?.trim(),
-            email: row.email?.trim(),
-            categoryCode: row.categorycode?.trim(),
-            categoryName: row.categorycategoryname?.trim(),
-            priorityCode: row.prioritycode?.trim(),
-            priorityName: row.priorityname?.trim(),
-            createdate: row.createdate, // Assuming createdate does not need trimming
-            createby: row.createby, // Assuming createby does not need trimming
-            fileAttach: row.fileattach?.trim(),
-            workerBy: row.workerby?.trim(),
-            workerNoted: row.workernote?.trim(),
-            workerStart: row.workerstart,
-            workerEnd: row.workerend,
-            reassingBy: row.reassingby?.trim(),
-            reassingByNode: row.reassingbynode?.trim(),
-            reassingDate: row.reassingdate,
-            ticketStatus: row.ticketstatus?.trim(),
-          };
-        });
-        // console.log(trimmedResult);
-        return SendSuccess(res, SMessage.SelectAll, trimmedResult);
-        // return SendSuccess(res, SMessage.SelectAll, result.rows);
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
       });
     } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showticketDetailsByClient(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { page = 1, limit = 10 } = req.query;
+
+    if (!username || !setTokenkey) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+      if (setTokenkey !== tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
+      }
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+      sqlQuery =
+        "SELECT * FROM vm_ticketdetails WHERE active = 'Y' and (workerby = $1 or reasignby = $1) order by createdate desc LIMIT $2 OFFSET $3";
+
+      queryParams.push(username, limit, offset);
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.NotFound || "Error fetching ticket details",
+            err
+          );
+        }
+
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No ticket details found"
+          );
+        }
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+    } catch (error) {
+      Console.log(error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
@@ -595,7 +603,8 @@ export default class TicketController {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
       let sqlQuery = "";
-      sqlQuery = "UPDATE ticketdetails SET stid = $1, workerby = $2, workernote = $3, workerend = Now() WHERE ticket_code = $4";
+      sqlQuery =
+        "UPDATE ticketdetails SET stid = $1, workerby = $2, workernote = $3, workerend = Now() WHERE ticket_code = $4";
 
       const queryParams = [
         stid.trim(),
@@ -992,4 +1001,88 @@ export default class TicketController {
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
+
+  static async newticketdetailchatnote(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { tcddid, ticketCode, typeNote, noteDescription } = req.body;
+
+    if (!username || !setTokenkey || !ticketCode || !typeNote || !noteDescription)
+      return SendError400(res, "Missing username in query parameters");
+
+    const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+    if (!tokenkey || setTokenkey !== tokenkey)
+      return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
+    try {
+      /*this is save data*/
+      const sqlQuery =
+        "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y') RETURNING tdcid";
+      const queryParams = [
+        tcddid,
+        ticketCode,
+        typeNote,
+        noteDescription,
+        username,
+      ];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorInsert || "Error creating ticket details chat note",
+            err
+          );
+        }
+        return SendCreate(res, 200, "Created", SMessage.Insert);
+      });
+      
+      /*this is save log*/
+      const savelog = await TicketController.saveLogsystem(
+        username,
+        "New Ticket Detail Chat Note",
+        `Ticket Code: ${ticketCode}, Type Note: ${typeNote}, Note Description: ${noteDescription}`
+      );
+
+    } catch (error) {
+      Console.log(error);
+      SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showticketdetailschatnote (req, res){
+    const { username, setTokenkey } = req.query;
+    const { page = 1, limit = 10, ticketcode = "" } = req.query;
+
+    if (!username || !setTokenkey)
+      return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey || setTokenkey !== tokenkey)
+        return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
+      const sqlQuery = "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by createdate desc LIMIT $2 OFFSET $3";
+      const queryParams = [ticketcode, limit, (page - 1) * limit];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorSelect || "Error fetching ticket details chat note",
+            err
+          );
+        }
+        if (!result.rows || result.rows.length === 0) {
+          return SendError400(
+            res,
+            EMessage.ErrorSelect
+          );
+        }
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+
+    } catch (error) {
+      SendError(res, 500, EMessage.ServerError, error);
+    }
+
+  }
+
+
 }
