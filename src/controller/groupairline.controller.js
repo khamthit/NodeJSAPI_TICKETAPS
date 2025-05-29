@@ -502,48 +502,48 @@ export default class GroupAirlineController {
       if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
-      
-        /*this is check data first*/
-        const client = await connected.connect();
-        await client.query("BEGIN"); // Start transaction
-        const checkExistenceQuery =
-          "select aldid from airlinedetails where galid = $1 and cusid = $2 and active = 'Y' order by aldid desc limit 1";
-        const existenceResult = await client.query(checkExistenceQuery, [
-          galid.trim(),
-          cusid.trim(),
-        ]);
-        if (existenceResult.rows.length > 0) {
-          await client.query("ROLLBACK"); // Rollback transaction
+
+      /*this is check data first*/
+      const client = await connected.connect();
+      await client.query("BEGIN"); // Start transaction
+      const checkExistenceQuery =
+        "select aldid from airlinedetails where galid = $1 and cusid = $2 and active = 'Y' order by aldid desc limit 1";
+      const existenceResult = await client.query(checkExistenceQuery, [
+        galid.trim(),
+        cusid.trim(),
+      ]);
+      if (existenceResult.rows.length > 0) {
+        await client.query("ROLLBACK"); // Rollback transaction
+        return SendError(
+          res,
+          409,
+          "This data have been already created or duplicate data"
+        );
+      }
+      const validationErrors = ValidateData({ galid, cusid });
+      if (validationErrors.length > 0) {
+        return SendError400(res, validationErrors);
+      }
+      const sqlQuery =
+        "Update airlinedetails set galid = $1, cusid = $2 where aldid = $3";
+      const queryParams = [galid.trim(), cusid.trim(), aldid];
+      connected.query(sqlQuery, queryParams, async (err, result) => {
+        if (err) {
           return SendError(
             res,
-            409,
-            "This data have been already created or duplicate data"
+            500,
+            EMessage.ErrorUpdate || "Error updating group airline details",
+            err
           );
         }
-        const validationErrors = ValidateData({ galid, cusid });
-        if (validationErrors.length > 0) {
-          return SendError400(res, validationErrors);
-        }
-        const sqlQuery =
-          "Update airlinedetails set galid = $1, cusid = $2 where aldid = $3";
-        const queryParams = [galid.trim(), cusid.trim(), aldid];
-        connected.query(sqlQuery, queryParams, async (err, result) => {
-          if (err) {
-            return SendError(
-              res,
-              500,
-              EMessage.ErrorUpdate || "Error updating group airline details",
-              err
-            );
-          }
-          return SendCreate(res, 200, "Updated id :" + aldid, SMessage.Update);
-        });
-        /*this is save log*/
-        const savelog = await GroupAirlineController.saveLogsystem(
-          username,
-          "Airline Details Updated",
-          `ID: ${aldid}, Galid: ${galid}, Cusid: ${cusid}`
-        );
+        return SendCreate(res, 200, "Updated id :" + aldid, SMessage.Update);
+      });
+      /*this is save log*/
+      const savelog = await GroupAirlineController.saveLogsystem(
+        username,
+        "Airline Details Updated",
+        `ID: ${aldid}, Galid: ${galid}, Cusid: ${cusid}`
+      );
     } catch (error) {
       console.log("Error in updategroupairlinedetails:", error);
       SendError(res, 500, EMessage.ServerError, error);
@@ -560,18 +560,16 @@ export default class GroupAirlineController {
         username
       );
       if (!tokenkey) {
-        return SendError(
-          res, 400, EMessage.NotFound, "Token key not found"
-        );
+        return SendError(res, 400, EMessage.NotFound, "Token key not found");
       }
-      if (setTokenkey !== tokenkey) 
+      if (setTokenkey !== tokenkey)
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
 
-      const sqlQuery = "update airlinedetails set active = 'N' where aldid = $1";
+      const sqlQuery =
+        "update airlinedetails set active = 'N' where aldid = $1";
       const parameter = [aldid];
-      connected.query(sqlQuery, parameter, async(err, result)=>{
-        if (err)
-          return SendError(res, 500, EMessage.ErrorUpdate, err);
+      connected.query(sqlQuery, parameter, async (err, result) => {
+        if (err) return SendError(res, 500, EMessage.ErrorUpdate, err);
         return SendCreate(res, 200, "Deleted id :" + aldid, SMessage.Delete);
       });
       //this is save log system
@@ -580,10 +578,9 @@ export default class GroupAirlineController {
         "Delete Airline Details",
         `aldid: ${aldid}` // Corrected "aldid"
       );
-    }catch (error){
-      console.log("Error in deletegroupairlinedetails:", error);
+    } catch (error) {
+      // console.log("Error in deletegroupairlinedetails:", error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
-
 }

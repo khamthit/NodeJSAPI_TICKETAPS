@@ -371,7 +371,6 @@ export default class TicketController {
         image_url, // This is already just the filename from multer, or null
         username,
       ];
-
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
           return SendError(
@@ -684,4 +683,268 @@ export default class TicketController {
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
+
+  static async createsystemstatus(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { code, statusname } = req.body;
+
+    if (!username || !setTokenkey || !code || !statusname) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+      }
+
+      //this is for check data first
+      const client = await connected.connect();
+      await client.query("BEGIN"); // Start transaction
+      const checkExistenceQuery =
+        "SELECT stid FROM systemstatus WHERE (code = $1 OR statusname = $2) And active = 'Y'";
+      const existenceResult = await client.query(checkExistenceQuery, [
+        code.trim(),
+        statusname.trim(),
+      ]);
+      if (existenceResult.rows.length > 0) {
+        await client.query("ROLLBACK"); // Rollback transaction
+        return SendError(
+          res,
+          409,
+          "This data have been already created or duplicate data"
+        );
+      }
+
+      const validationErrors = ValidateData({ code, statusname });
+      if (validationErrors.length > 0) {
+        return SendError400(res, validationErrors);
+      }
+
+      const sqlQuery =
+        "INSERT INTO systemstatus (code, statusname, createdate, createby, active) VALUES ($1, $2, NOW(), $3, 'Y') RETURNING stid";
+      const queryParams = [code.trim(), statusname.trim(), username];
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorInsert || "Error creating systemstatus",
+            err
+          );
+        }
+        return SendCreate(res, 200, "Created", SMessage.Insert);
+      });
+      //this is save log
+      const savelog = await TicketController.saveLogsystem(
+        username,
+        "System Status Saved",
+        `Code: ${code}, statusname: ${statusname}`
+      );
+    } catch (error) {
+      console.log(error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async updatesystemstatus(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { stid, code, statusname } = req.body;
+
+    if (!username || !setTokenkey || !stid || !code || !statusname) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+      }
+
+      const validationErrors = ValidateData({ code, statusname });
+      if (validationErrors.length > 0) {
+        return SendError400(res, validationErrors);
+      }
+
+      const sqlQuery =
+        "UPDATE systemstatus SET code = $1, statusname = $2 WHERE stid = $3";
+      const queryParams = [code.trim(), statusname.trim(), stid];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorUpdate || "Error updating system status",
+            err
+          );
+        }
+        return SendCreate(
+          res,
+          200,
+          "Updated",
+          SMessage.Update || "Update Success"
+        );
+      });
+      //this is save log
+      const savelog = await TicketController.saveLogsystem(
+        username,
+        "System Status Update",
+        `ID: ${stid}, Code: ${code}, statusname: ${statusname}`
+      );
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async deletesystemstatus(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { stid } = req.body;
+
+    if (!username || !setTokenkey || !stid) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+      }
+
+      const sqlQuery = "UPDATE systemstatus SET active = 'N' WHERE stid = $1";
+      const queryParams = [stid];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorDelete || "Error deleting system status",
+            err
+          );
+        }
+        return SendCreate(
+          res,
+          200,
+          "Deleted",
+          SMessage.Delete || "Delete Success"
+        );
+      });
+
+      //this is save log
+      const savelog = await TicketController.saveLogsystem(
+        username,
+        "System Status Deleted",
+        `ID: ${stid}`
+      );
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+  static async showSystemStatus(req, res) {
+    const { username, setTokenkey, searchtext = "" } = req.query;
+    let { page = 1, limit = 10 } = req.query;
+
+    if (!username) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+
+      if (searchtext === "") {
+        sqlQuery =
+          "SELECT * FROM systemstatus WHERE active = 'Y' order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset);
+      } else {
+        sqlQuery =
+          "SELECT * FROM systemstatus WHERE active = 'Y' AND (code ILIKE $3 OR statusname ILIKE $3) order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, `%${searchtext}%`);
+      }
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500, // Internal Server Error for query failures
+            EMessage.ErrorSelect || "Error fetching ticket categories",
+            err
+          );
+        }
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No ticket categories found"
+          );
+        }
+        if (setTokenkey === tokenkey) {
+          const trimmedResult = result.rows.map((row) => {
+            return {
+              ...row,
+              stid: row.stid, // Assuming tcid does not need trimming or is not a string
+              code: row.code?.trim(),
+              statusname: row.statusname?.trim(),
+              createdate: row.createdate, // Assuming createdate does not need trimming
+              createby: row.createby, // Assuming createby does not need trimming
+            };
+          });
+          return SendSuccess(res, SMessage.SelectAll, trimmedResult);
+        } else {
+          return SendError(
+            res,
+            401,
+            EMessage.Unauthorized,
+            "Token key mismatch"
+          );
+        }
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
 }

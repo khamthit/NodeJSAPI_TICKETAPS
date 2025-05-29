@@ -6,6 +6,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import GroupAirlineController from "../controller/groupairline.controller.js";
+import AnnoucementController from "../controller/announcement.controller.js";
 
 const router = express.Router();
 const app = express();
@@ -43,6 +44,11 @@ router.get("/Ticket/GETticketDetails", TicketController.showticketDetails);
 router.post("/Ticket/UpdateStatusTicketDetails", TicketController.ticketchangestatus);
 router.post("/Ticket/TicketDetailsReassign", TicketController.ticketdetailsreassign);
 router.post("/Ticket/OpenImage", TicketController.openImage);
+router.post("/Ticket/NewStatus", TicketController.createsystemstatus);
+router.post("/Ticket/UpdateStatus", TicketController.updatesystemstatus);
+router.post("/Ticket/DeleteStatus", TicketController.deletesystemstatus);
+router.get("/Ticket/GETALLStatus", TicketController.showSystemStatus);
+
 router.get("/Priority/GETALL", PriorityController.showPriority);
 router.post("/Priority/NewPriority", PriorityController.createPriority);
 router.post("/Priority/UpdatePriority", PriorityController.updatePriority);
@@ -55,6 +61,9 @@ router.post("/GroupAirLine/NewGroupAirLineDetails", GroupAirlineController.newai
 router.get("/GroupAirline/GETGroupAirlineDetails", GroupAirlineController.showairlinedetails);
 router.post("/GroupAirline/UpdateGroupAirlineDetails", GroupAirlineController.updategroupairlinedetails);
 router.post("/GroupAirline/DeleteGroupAirlineDetails", GroupAirlineController.deletegroupairlinedetails);
-
+router.get("/Announcement/GETALLTargetaudience", AnnoucementController.showannouncement);
+router.post("/Announcement/NewTargetaudience", AnnoucementController.newtargetaudience);
+router.post("/Announcement/DeleteTargetaudience", AnnoucementController.deletetargetaudience);
+router.post("/Announcement/UpdateTargetaudience", AnnoucementController.updatetargetaudience);
 
 export default router;
