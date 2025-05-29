@@ -3,9 +3,11 @@ import { EMessage, SMessage } from "../service/message.js";
 import { UploadImageToCloud } from "../config/cloudinary.js";
 import {
   SendCreate,
+  SendDuplicateData,
   SendError,
   SendError400,
   SendSuccess,
+  SendErrorTokenkey,
 } from "../service/response.js";
 import { ValidateData } from "../service/validate.js";
 import { UploadImageToServer } from "../config/cloudinary.js";
@@ -13,7 +15,6 @@ import fs from "fs";
 import path from "path"; // Import the 'path' module
 
 export default class TicketController {
-
   static async fetchTokenKeyForUser(username) {
     return new Promise((resolve, reject) => {
       if (!username) {
@@ -177,11 +178,7 @@ export default class TicketController {
       ]);
       if (existenceResult.rows.length > 0) {
         await client.query("ROLLBACK"); // Rollback transaction
-        return SendError(
-          res,
-          409,
-          "This data have been already created or duplicate data"
-        );
+        return SendDuplicateData(res, 409, EMessage.ErrorDuplicate);
       }
 
       const validationErrors = ValidateData({ code, categoryname });
@@ -195,10 +192,9 @@ export default class TicketController {
 
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
-          return SendError(
+          return SendDuplicateData(
             res,
-            500,
-            EMessage.ErrorInsert || "Error creating ticket category",
+            EMessage.ErrorDuplicate || "Error creating ticket category",
             err
           );
         }
@@ -272,7 +268,7 @@ export default class TicketController {
     try {
       const tokenkey = await TicketController.fetchTokenKeyForUser(username);
       if (!tokenkey) {
-        return SendError(
+        return SendErrorTokenkey(
           res,
           401,
           EMessage.Unauthorized,
@@ -281,7 +277,12 @@ export default class TicketController {
       }
 
       if (setTokenkey !== tokenkey) {
-        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
       }
 
       const sqlQuery = "UPDATE ticketcategory SET active = 'N' WHERE tcid = $1";
@@ -303,6 +304,7 @@ export default class TicketController {
         );
       });
     } catch (error) {
+      console.log(error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
@@ -330,7 +332,7 @@ export default class TicketController {
     try {
       const tokenkey = await TicketController.fetchTokenKeyForUser(username);
       if (!tokenkey) {
-        return SendError(
+        return SendErrorTokenkey(
           res,
           401,
           EMessage.Unauthorized,
@@ -339,7 +341,12 @@ export default class TicketController {
       }
 
       if (setTokenkey !== tokenkey) {
-        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
       }
       //image
       const image = req.files;
@@ -394,10 +401,10 @@ export default class TicketController {
       page = 1,
       limit = 10,
       searchtext = "",
-      search_status = "",
-      search_category = "",
-      search_startdate = "",
-      search_enddate = "",
+      searchStatus = "",
+      searchCategory = "",
+      searchStartdate = "",
+      searchEnddate = "",
     } = req.query;
 
     if (!username || !setTokenkey) {
@@ -406,7 +413,7 @@ export default class TicketController {
     try {
       const tokenkey = await TicketController.fetchTokenKeyForUser(username);
       if (!tokenkey) {
-        return SendError(
+        return SendErrorTokenkey(
           res,
           401,
           EMessage.Unauthorized,
@@ -415,7 +422,12 @@ export default class TicketController {
       }
 
       if (setTokenkey !== tokenkey) {
-        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
       }
 
       const offset = (page - 1) * limit;
@@ -424,68 +436,66 @@ export default class TicketController {
 
       if (
         searchtext === "" &&
-        search_category === "" &&
-        search_status === "" &&
-        search_startdate === "" &&
-        search_enddate === ""
+        searchCategory === "" &&
+        searchStatus === "" &&
+        searchStartdate === "" &&
+        searchEnddate === ""
       ) {
         sqlQuery =
-          "SELECT * FROM ticketdetails WHERE active = 'Y' order by createdate desc LIMIT $1 OFFSET $2";
+          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' order by createdate desc LIMIT $1 OFFSET $2";
         queryParams.push(limit, offset);
       } else if (
-        (searchtext !== "" && search_category === "") ||
-        (search_status === "" &&
-          search_startdate === "" &&
-          search_enddate === "")
+        (searchtext !== "" && searchCategory === "") ||
+        (searchStatus === "" && searchStartdate === "" && searchEnddate === "")
       ) {
         sqlQuery =
-          "SELECT * FROM ticketdetails WHERE active = 'Y' AND (subject ILIKE $3 OR email ILIKE $3) order by createdate desc LIMIT $1 OFFSET $2";
+          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND (subject ILIKE $3 OR email ILIKE $3) order by createdate desc LIMIT $1 OFFSET $2";
         queryParams.push(limit, offset, `%${searchtext}%`);
       } else if (
         searchtext === "" &&
-        search_category !== "" &&
-        search_status === "" &&
-        search_startdate === "" &&
-        search_enddate === ""
+        searchCategory !== "" &&
+        searchStatus === "" &&
+        searchStartdate === "" &&
+        searchEnddate === ""
       ) {
         sqlQuery =
-          "SELECT * FROM ticketdetails WHERE active = 'Y' AND category_code LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset, search_category);
+          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND categorycode LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, searchCategory);
       } else if (
         searchtext === "" &&
-        search_category === "" &&
-        search_status !== "" &&
-        search_startdate === "" &&
-        search_enddate === ""
+        searchCategory === "" &&
+        searchStatus !== "" &&
+        searchStartdate === "" &&
+        searchEnddate === ""
       ) {
         sqlQuery =
-          "SELECT * FROM ticketdetails WHERE active = 'Y' AND ticketstatus LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset, search_status);
+          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND statusName LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, searchStatus);
       } else if (
         searchtext === "" &&
-        search_category === "" &&
-        search_status === "" &&
-        search_startdate !== "" &&
-        search_enddate !== ""
+        searchCategory === "" &&
+        searchStatus === "" &&
+        searchStartdate !== "" &&
+        searchEnddate !== ""
       ) {
         sqlQuery =
-          "SELECT * FROM ticketdetails WHERE active = 'Y' AND createdate >= $3 AND createdate <= $4 order by createdate desc LIMIT $1 OFFSET $2";
+          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND createdate >= $3 AND createdate <= $4 order by createdate desc LIMIT $1 OFFSET $2";
         queryParams.push(
           limit,
           offset,
-          search_startdate,
-          search_enddate + " " + "23:59:59.999999"
+          searchStartdate,
+          searchEnddate + " " + "23:59:59.999999"
         );
       } else {
         sqlQuery =
-          "SELECT * FROM ticketdetails WHERE active = 'Y' AND (ticket_code LIKE $3 OR ticketstatus LIKE $4 OR ticketstatus createdate >= $5 AND createdate <= $6) order by createdate desc LIMIT $1 OFFSET $2";
+          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND (ticketcode LIKE $3 OR statusName LIKE $4 OR createdate >= $5 AND createdate <= $6) order by createdate desc LIMIT $1 OFFSET $2";
         queryParams.push(
           limit,
           offset,
-          search_category,
-          search_status,
-          search_startdate,
-          search_enddate + " " + "23:59:59.999999"
+          searchCategory,
+          searchStatus,
+          searchStartdate,
+          searchEnddate + " " + "23:59:59.999999"
         );
       }
 
@@ -498,6 +508,7 @@ export default class TicketController {
             err
           );
         }
+
         if (!result.rows || result.rows.length === 0) {
           return SendError(
             res,
@@ -505,7 +516,56 @@ export default class TicketController {
             EMessage.NotFound + " No ticket details found"
           );
         }
-        return SendSuccess(res, SMessage.SelectAll, result.rows);
+        const trimmedResult = result.rows.map((row) => {
+          const {
+            ticketid,
+            ticket_code,
+            category_code,
+            category_categoryname,
+            priority_code,
+            priority_name,
+            fileattach,
+            ticketstatus,
+            workerby,
+            workernote,
+            workerstart,
+            workerend,
+            reassingby,
+            reassingbynode,
+            reassingdate,
+            createdate,
+            createby,
+            ...rest
+          } = row;
+          return {
+            // ...row,
+            ...rest,
+            tcddid: row.tcddid, // Assuming tcid does not need trimming or is not a string
+            ticketId: row.ticketid,
+            ticketCode: row.ticketcode?.trim(),
+            subject: row.subject?.trim(),
+            descriptions: row.descriptions?.trim(),
+            email: row.email?.trim(),
+            categoryCode: row.categorycode?.trim(),
+            categoryName: row.categorycategoryname?.trim(),
+            priorityCode: row.prioritycode?.trim(),
+            priorityName: row.priorityname?.trim(),
+            createdate: row.createdate, // Assuming createdate does not need trimming
+            createby: row.createby, // Assuming createby does not need trimming
+            fileAttach: row.fileattach?.trim(),
+            workerBy: row.workerby?.trim(),
+            workerNoted: row.workernote?.trim(),
+            workerStart: row.workerstart,
+            workerEnd: row.workerend,
+            reassingBy: row.reassingby?.trim(),
+            reassingByNode: row.reassingbynode?.trim(),
+            reassingDate: row.reassingdate,
+            ticketStatus: row.ticketstatus?.trim(),
+          };
+        });
+        // console.log(trimmedResult);
+        return SendSuccess(res, SMessage.SelectAll, trimmedResult);
+        // return SendSuccess(res, SMessage.SelectAll, result.rows);
       });
     } catch (error) {
       return SendError(res, 500, EMessage.ServerError, error);
@@ -514,9 +574,9 @@ export default class TicketController {
 
   static async ticketchangestatus(req, res) {
     const { username, setTokenkey } = req.query;
-    const { ticket_code, ticketstatus, workernoted } = req.body;
+    const { ticket_code, stid, workernoted } = req.body;
 
-    if (!username || !setTokenkey || !ticket_code || !ticketstatus) {
+    if (!username || !setTokenkey || !ticket_code || !stid) {
       return SendError400(res, "Missing username in query parameters");
     }
 
@@ -534,21 +594,11 @@ export default class TicketController {
       if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
-
       let sqlQuery = "";
-      if (
-        ticketstatus.trim() === "Resolved" ||
-        ticketstatus.trim() === "Closed"
-      ) {
-        sqlQuery =
-          "UPDATE ticketdetails SET ticketstatus = $1, workerby = $2, workernote = $3, workerend = Now() WHERE ticket_code = $4";
-      } else {
-        sqlQuery =
-          "UPDATE ticketdetails SET ticketstatus = $1, workerby = $2, workernote = $3, workerstart = Now() WHERE ticket_code = $4";
-      }
+      sqlQuery = "UPDATE ticketdetails SET stid = $1, workerby = $2, workernote = $3, workerend = Now() WHERE ticket_code = $4";
 
       const queryParams = [
-        ticketstatus.trim(),
+        stid.trim(),
         username.trim(),
         workernoted.trim(),
         ticket_code.trim(),
@@ -718,11 +768,7 @@ export default class TicketController {
       ]);
       if (existenceResult.rows.length > 0) {
         await client.query("ROLLBACK"); // Rollback transaction
-        return SendError(
-          res,
-          409,
-          "This data have been already created or duplicate data"
-        );
+        return SendDuplicateData(res, 409, EMessage.ErrorDuplicate);
       }
 
       const validationErrors = ValidateData({ code, statusname });
@@ -946,5 +992,4 @@ export default class TicketController {
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
-
 }

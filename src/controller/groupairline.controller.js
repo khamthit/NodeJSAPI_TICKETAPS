@@ -6,6 +6,8 @@ import {
   SendError,
   SendError400,
   SendSuccess,
+  SendDuplicateData,
+  SendErrorTokenkey
 } from "../service/response.js";
 import { ValidateData } from "../service/validate.js";
 import { UploadImageToServer } from "../config/cloudinary.js";
@@ -360,7 +362,7 @@ export default class GroupAirlineController {
         ]);
         if (existenceResult.rows.length > 0) {
           await client.query("ROLLBACK"); // Rollback transaction
-          return SendError400(
+          return SendDuplicateData(
             res,
             "This data have been already created or duplicate data"
           );
@@ -368,7 +370,7 @@ export default class GroupAirlineController {
 
         const validationErrors = ValidateData({ galid, cusid });
         if (validationErrors.length > 0) {
-          return SendError400(res, validationErrors);
+          return SendDuplicateData(res, validationErrors);
         }
 
         //this is save data
@@ -411,7 +413,7 @@ export default class GroupAirlineController {
       }
 
       if (setTokenkey !== tokenkey) {
-        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+        return SendDuplicateData(res, EMessage.Unauthorized, "Token key mismatch");
       }
 
       const offset = (page - 1) * limit;
@@ -560,10 +562,10 @@ export default class GroupAirlineController {
         username
       );
       if (!tokenkey) {
-        return SendError(res, 400, EMessage.NotFound, "Token key not found");
+        return SendErrorTokenkey(res, 400, EMessage.NotFound, "Token key not found");
       }
       if (setTokenkey !== tokenkey)
-        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+        return SendErrorTokenkey(res, 401, EMessage.Unauthorized, "Token key mismatch");
 
       const sqlQuery =
         "update airlinedetails set active = 'N' where aldid = $1";

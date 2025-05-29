@@ -37,4 +37,5 @@ export const EMessage = {
   ErrorUpdate: "Error Update",
   ErrorDelete: "Error Delete",
   ErrorSelect: "Error Select",
+  ErrorDuplicate: "Error Duplicate",
 };

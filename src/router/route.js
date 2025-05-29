@@ -35,33 +35,33 @@ const upload = multer({
 });
 
 //-------- auth -------
-router.get("/TicketCategory/GETALL", TicketController.showTicketCategory);
+router.get("/TicketCategory/GetAllCategory", TicketController.showTicketCategory);
 router.post("/TicketCategory/NewTicketCategory", TicketController.createTicketCategory);
 router.post("/TicketCategory/UpdateTicketCategory", TicketController.updateTicketCategory);
 router.post("/TicketCategory/DeleteTicketCategory", TicketController.deleteTicketCategory);
-router.post("/Ticket/Newticketdetails", TicketController.createticketdetail);
-router.get("/Ticket/GETticketDetails", TicketController.showticketDetails);
+router.post("/Ticket/NewticketDetails", TicketController.createticketdetail);
+router.get("/Ticket/GetTicketDetails", TicketController.showticketDetails);
 router.post("/Ticket/UpdateStatusTicketDetails", TicketController.ticketchangestatus);
 router.post("/Ticket/TicketDetailsReassign", TicketController.ticketdetailsreassign);
 router.post("/Ticket/OpenImage", TicketController.openImage);
 router.post("/Ticket/NewStatus", TicketController.createsystemstatus);
 router.post("/Ticket/UpdateStatus", TicketController.updatesystemstatus);
 router.post("/Ticket/DeleteStatus", TicketController.deletesystemstatus);
-router.get("/Ticket/GETALLStatus", TicketController.showSystemStatus);
+router.get("/Ticket/GetAllStatus", TicketController.showSystemStatus);
 
-router.get("/Priority/GETALL", PriorityController.showPriority);
+router.get("/Priority/GetAllPriority", PriorityController.showPriority);
 router.post("/Priority/NewPriority", PriorityController.createPriority);
 router.post("/Priority/UpdatePriority", PriorityController.updatePriority);
 router.post("/Priority/DeletePriority", PriorityController.deletePriority);
-router.get("/GroupAirline/GETALL", GroupAirlineController.showgroupline);
+router.get("/GroupAirline/GetAllAirline", GroupAirlineController.showgroupline);
 router.post("/GroupAirline/NewGroupAirline", GroupAirlineController.creategroupline);
 router.post("/GroupAirline/DeleteGroupAirline", GroupAirlineController.deletegroupline);
 router.post("/GroupAirline/UpdateGroupAirline", GroupAirlineController.updategroupline);
 router.post("/GroupAirLine/NewGroupAirLineDetails", GroupAirlineController.newairlinedetails);
-router.get("/GroupAirline/GETGroupAirlineDetails", GroupAirlineController.showairlinedetails);
+router.get("/GroupAirline/GetGroupAirlineDetails", GroupAirlineController.showairlinedetails);
 router.post("/GroupAirline/UpdateGroupAirlineDetails", GroupAirlineController.updategroupairlinedetails);
 router.post("/GroupAirline/DeleteGroupAirlineDetails", GroupAirlineController.deletegroupairlinedetails);
-router.get("/Announcement/GETALLTargetaudience", AnnoucementController.showannouncement);
+router.get("/Announcement/GetAllTargetaudience", AnnoucementController.showannouncement);
 router.post("/Announcement/NewTargetaudience", AnnoucementController.newtargetaudience);
 router.post("/Announcement/DeleteTargetaudience", AnnoucementController.deletetargetaudience);
 router.post("/Announcement/UpdateTargetaudience", AnnoucementController.updatetargetaudience);

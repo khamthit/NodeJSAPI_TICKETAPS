@@ -6,6 +6,8 @@ import {
   SendError,
   SendError400,
   SendSuccess,
+  SendErrorTokenkey,
+  SendDuplicateData,
 } from "../service/response.js";
 import { ValidateData } from "../service/validate.js";
 import { UploadImageToServer } from "../config/cloudinary.js";
@@ -82,9 +84,8 @@ export default class AnnoucementController {
         username
       );
       if (!tokenkey) {
-        return SendError(
+        return SendErrorTokenkey(
           res,
-          401,
           EMessage.Unauthorized,
           "Token key not found or invalid for user"
         );
@@ -158,16 +159,15 @@ export default class AnnoucementController {
         username
       );
       if (!tokenkey) {
-        return SendError(
+        return SendErrorTokenkey(
           res,
-          401,
           EMessage.Unauthorized,
           "Token key not found or invalid for user"
         );
       }
 
       if (setTokenkey !== tokenkey) {
-        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+        return SendErrorTokenkey(res, EMessage.Unauthorized, "Token key mismatch");
       }
 
       //this is for check data first
@@ -181,9 +181,8 @@ export default class AnnoucementController {
       ]);
       if (existenceResult.rows.length > 0) {
         await client.query("ROLLBACK"); // Rollback transaction
-        return SendError(
+        return SendDuplicateData(
           res,
-          409,
           "This data have been already created or duplicate data"
         );
       }
@@ -233,15 +232,14 @@ export default class AnnoucementController {
         username
       );
       if (!tokenkey) {
-        return SendError(
+        return SendErrorTokenkey(
           res,
-          401,
           EMessage.Unauthorized,
           "Token key not found or invalid for user"
         );
       }
       if (setTokenkey !== tokenkey) {
-        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+        return SendErrorTokenkey(res, EMessage.Unauthorized, "Token key mismatch");
       }
       const sqlQuery = "update targetaudience set active = 'N' where tgadid = $1";
       connected.query(sqlQuery, [tgadid], async (err, result) => {
