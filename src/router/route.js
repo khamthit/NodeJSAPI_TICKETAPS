@@ -73,5 +73,8 @@ router.post("/Announcement/NewAnnouncementStatus", AnnoucementController.createa
 router.post("/Announcement/UpdateAnnouncementStatus", AnnoucementController.updateannouncementstatus);
 router.post("/Announcement/DeleteAnnouncementStatus", AnnoucementController.deleteannouncementstatus);
 router.post("/Announcement/NewAnnouncementDetails", AnnoucementController.newannouncementdetails);
+router.get("/Announcement/GetAnnouncementDetails", AnnoucementController.showannouncementdetails);
+router.get("/Announcement/GetAnnouncementTargetAudienceByAnouncementId", AnnoucementController.fectannouncementdetailtargetaudiencebyAicmid);
+
 
 export default router;

@@ -27,3 +27,7 @@ export const SendDuplicateData = (res, message,error)=>{
 export const SendErrorTokenkey = (res, statusCode, message, error)=>{
     res.status(statusCode).json({success: false, statusCode, message, error, data:{}}) 
 }
+
+export const SendSuccessAndFectDataAnnouncement =(res, audience, titlename, reasonText, startdate, enddate, scheduledate, message, data)=>{
+    res.status(200).json({success: true, statusCode: 200, audience, titlename, reasonText, startdate, enddate, scheduledate, message, data});
+}

@@ -8,6 +8,7 @@ import {
   SendSuccess,
   SendErrorTokenkey,
   SendDuplicateData,
+  SendSuccessAndFectDataAnnouncement,
 } from "../service/response.js";
 import { ValidateData } from "../service/validate.js";
 import { UploadImageToServer } from "../config/cloudinary.js";
@@ -38,6 +39,28 @@ export default class AnnoucementController {
         }
         // console.log("Tokenkey found:", result.rows[0].tokenKey);
         resolve(result.rows[0].tokenKey);
+      });
+    });
+  }
+
+  static async fectTargetaudience(tgadid) {
+    return new Promise((resolve, reject) => {
+      if (!tgadid) {
+        console.log("No emailorphone provided");
+        return resolve(null);
+      }
+      const sqlQuery = "select audience from targetaudience where tgadid = $1";
+      connected.query(sqlQuery, [tgadid], (err, result) => {
+        if (err) {
+          //   console.log("Database error fetching tokenkey:", err);
+          return reject(
+            new Error("Database query failed while fetching targetaudience id.")
+          );
+        }
+        if (!result || !result.rows || result.rows.length === 0) {
+          return resolve(null);
+        }
+        resolve(result.rows[0].audience);
       });
     });
   }
@@ -616,17 +639,28 @@ export default class AnnoucementController {
       enddate,
       scheduledate,
       schedulehour,
+      cus_id,
+      group_id,
     } = req.body;
     try {
+      // Ensure all async operations are properly awaited and errors are caught.
       if (
         !username ||
         !setTokenkey ||
         !titleName ||
         !reasonText ||
         !astid ||
-        !tgadid
-      )
-        return SendError400(res, "Missing username in query parameters");
+        !tgadid // tgadid is expected to be a number or string convertible to number
+      ) {
+        return SendError400(
+          res,
+          "Missing required fields in request query or body."
+        );
+      }
+
+      //this is fect data targetaudience
+      const audience = await AnnoucementController.fectTargetaudience(tgadid);
+      console.log("audience : ", audience);
 
       const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
         username
@@ -634,31 +668,35 @@ export default class AnnoucementController {
       if (!tokenkey || tokenkey !== setTokenkey) {
         return SendErrorTokenkey(
           res,
-          401,
+          401, // Status code
           EMessage.Unauthorized,
-          "Token key not found or invalid for user"
+          "Token key mismatch or not found."
         );
       }
 
-      //image
-      const image = req.files;
-      // console.log("Image:", image.Image.name);
-      const imagename = image.fileattach.name;
-      const imageDataBuffer = image.fileattach.data;
-      // console.log("Image Data Buffer:", imageDataBuffer);
-      // console.log("Image Name:", imagename);
-      // console.log("imagedata:", image.fileattach.data)
-      const image_url = await UploadImageToServer(image.fileattach.data);
-      if (!image) return SendError400(res, EMessage.BadRequest + " Image");
-      if (!image_url) return SendError400(res, EMessage.ErrorUploadImage);
+      // Image Upload Handling
+      if (!req.files || !req.files.fileattach) {
+        return SendError400(
+          res,
+          EMessage.BadRequest + " - Image file 'fileattach' is missing."
+        );
+      }
+      const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+
+      const image_url = await UploadImageToServer(imageFile.data);
+      if (!image_url) {
+        return SendError400(res, EMessage.ErrorUploadImage);
+      }
 
       const validationErrors = ValidateData({ titleName, reasonText });
       if (validationErrors.length > 0) {
         return SendError400(res, validationErrors);
       }
-      // console.log("Image Name:", image_url);
-      const sqlQuery ="Call pd_newannouncementdetails ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0)";
-      const queryParams = [
+
+      // First Stored Procedure: Create announcement details
+      const sqlQueryInsertAnnouncement =
+        "CALL pd_newannouncementdetails($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0)";
+      const queryParamsInsert = [
         titleName.trim(),
         reasonText.trim(),
         astid,
@@ -669,45 +707,286 @@ export default class AnnoucementController {
         schedulehour || null,
         username,
         image_url,
+        cus_id || null, // This corresponds to $11, the '0' is literal in the SQL
       ];
+
       let get_aicmid;
-      connected.query(sqlQuery, queryParams, (err, result) => {
-        if (err) {
-          return SendError(res, 500, EMessage.ErrorInsert, err);
-        }
-        const idColumnName = 'out_aicmid'; // Example: Use 'id', 'generated_id', or whatever your procedure returns.
-        let responseData = {};
 
-        if (result.rows && result.rows.length > 0 && result.rows[0][idColumnName] !== undefined) {
-          responseData = { id: result.rows[0][idColumnName] };
-          get_aicmid = result.rows[0][idColumnName];
-        } else {
-          // This block means the procedure executed but didn't return the ID as expected.
-          console.warn(`Stored procedure pd_newannouncementdetails executed successfully but did not return '${idColumnName}' in result.rows[0]. An empty object will be sent in data.`);
-        }
-
-        console.log("Response Data:", { id: get_aicmid});
-        
-        // Send success response. HTTP status 201 for "Created".
-        return SendCreate(res, 200, SMessage.Insert, responseData);
+      // Promisify the first database call
+      const resultInsert = await new Promise((resolve, reject) => {
+        connected.query(
+          sqlQueryInsertAnnouncement,
+          queryParamsInsert,
+          (err, result) => {
+            if (err) return reject(err);
+            resolve(result);
+          }
+        );
       });
 
-      ///This is fect data for sending
-      const sqlSave = "";
-      if (tgadid === 1){
-        //this is fect data all airline and select table in Customer
-        sqlSave = "INSERT INTO announcementdetailTargetaudience (aicmid, tgadid, code, audience, customerfull, customercode, customername, cus_email, createby, createdate) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())";
-        
-
-      }else if (tgadid === 2){
-        //this is fect data only an airline
-      }else{
-        //this is fect data airline by group airline in table airlinedetails
+      const idColumnName = "out_aicmid";
+      if (
+        resultInsert.rows &&
+        resultInsert.rows.length > 0 &&
+        resultInsert.rows[0][idColumnName] !== undefined
+      ) {
+        get_aicmid = resultInsert.rows[0][idColumnName];
+      } else {
+        console.warn(
+          `Stored procedure pd_newannouncementdetails executed but did not return '${idColumnName}'.`
+        );
+        return SendError(
+          res,
+          500,
+          EMessage.ServerError,
+          "Failed to retrieve announcement ID after creation."
+        );
       }
 
+      if (!get_aicmid) {
+        return SendError(
+          res,
+          500,
+          EMessage.ServerError,
+          "Announcement ID is invalid after creation."
+        );
+      }
+      console.log("Created announcement detail. ID:", get_aicmid);
+
+      // Second Stored Procedure: Save target audience details
+      let sqlSaveTargetAudience;
+      let queryParamsTargetAudience;
+      const numericTgadid = Number(tgadid);
+
+      if (numericTgadid === 1) {
+        // All customers
+        sqlSaveTargetAudience =
+          "CALL pd_newannouncementdetailtargetaudience($1, $2, $3, $4)";
+        queryParamsTargetAudience = [get_aicmid, numericTgadid, username, 0]; // 0 for 'all customers'
+      } else if (numericTgadid === 2) {
+        // Specific customer
+        if (!cus_id) {
+          return SendError400(
+            res,
+            "Missing cus_id for target audience type 'specific customer'."
+          );
+        }
+        sqlSaveTargetAudience =
+          "CALL pd_newannouncementdetailtargetaudience($1, $2, $3, $4)";
+        queryParamsTargetAudience = [
+          get_aicmid,
+          numericTgadid,
+          username,
+          cus_id,
+        ];
+      } else if (numericTgadid === 3) {
+        // Specific group (assuming tgadid 3 is for group)
+        if (!group_id) {
+          return SendError400(
+            res,
+            "Missing group_id for target audience type 'specific group'."
+          );
+        }
+        sqlSaveTargetAudience =
+          "CALL pd_newannouncementdetailtargetaudience($1, $2, $3, $4)"; // Assuming procedure handles group_id
+        queryParamsTargetAudience = [
+          get_aicmid,
+          numericTgadid,
+          username,
+          group_id,
+        ];
+      } else {
+        console.log(
+          `No specific target audience action for tgadid: ${numericTgadid}`
+        );
+      }
+
+      if (sqlSaveTargetAudience && queryParamsTargetAudience) {
+        await new Promise((resolve, reject) => {
+          connected.query(
+            sqlSaveTargetAudience,
+            queryParamsTargetAudience,
+            (err, result) => {
+              if (err) return reject(err);
+              resolve(result);
+            }
+          );
+        });
+        console.log(`Processed target audience for tgadid: ${numericTgadid}`);
+      }
+
+      //return SendCreate(res, 200, SMessage.Insert, { id: get_aicmid, message: "Announcement created and target audience processed." });
+
+      //This is fect data by announcementdetailTargetaudience by aicmid
+      const sqldata =
+        "Select * from announcementdetailTargetaudience where aicmid = $1";
+      const queryParamsdata = [get_aicmid];
+      connected.query(sqldata, queryParamsdata, (err, result) => {
+        if (err) {
+          return SendError(res, 500, EMessage.ErrorSelect, err);
+        }
+
+        return SendSuccessAndFectDataAnnouncement(
+          res,
+          audience,
+          titleName,
+          reasonText,
+          startdate,
+          enddate,
+          scheduledate,
+          SMessage.SelectAll,
+          result.rows
+        );
+      });
+    } catch (error) {
+      console.error("Error in newannouncementdetails:", error);
+      return SendError(
+        res,
+        500,
+        EMessage.ServerError,
+        error.message || "An unexpected error occurred."
+      );
+    }
+  }
+
+  static async showannouncementdetails(req, res) {
+    const { username, setTokenkey } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      searchtext = "",
+      searchStatus = "",
+      searchStartdate = "",
+      searchEnddate = "",
+    } = req.query;
+
+    if (!username || !setTokenkey) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
+      }
+
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+
+      if (
+        searchtext === "" &&
+        searchStatus === "" &&
+        searchStartdate === "" &&
+        searchEnddate === ""
+      ) {
+        sqlQuery =
+          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset);
+      } else if (
+        (searchtext !== "") ||
+        (searchStatus === "" && searchStartdate === "" && searchEnddate === "")
+      ) {
+        sqlQuery =
+          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND (titlename LIKE $3 OR reasontext LIKE $3 OR anouncementcode LIKE $3 OR statuscode LIKE $3 OR statusname LIKE $3) order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, `%${searchtext}%`);
+      }else if (
+        searchtext === "" &&
+        searchStatus !== "" &&
+        searchStartdate === "" &&
+        searchEnddate === ""
+      ) {
+        sqlQuery =
+          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND statusName LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, searchStatus);
+      } else if (
+        searchtext === "" &&
+        searchStatus === "" &&
+        searchStartdate !== "" &&
+        searchEnddate !== ""
+      ) {
+        sqlQuery =
+          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND createdate >= $3 AND createdate <= $4 order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(
+          limit,
+          offset,
+          searchStartdate,
+          searchEnddate + " " + "23:59:59.999999"
+        );
+      } else {
+        sqlQuery =
+          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND (statusname LIKE $3 OR createdate >= $4 AND createdate <= $5) order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(
+          limit,
+          offset,
+          searchStatus,
+          searchStartdate,
+          searchEnddate + " " + "23:59:59.999999"
+        );
+      }
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.NotFound || "Error fetching ticket details",
+            err
+          );
+        }
+
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No ticket details found"
+          );
+        }
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async fectannouncementdetailtargetaudiencebyAicmid(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { aicmid } = req.query;
+
+    if (!username || !setTokenkey || !aicmid) {
+        return sendError400(res, "Missing username in query parameters");
+    }
+    const tokenkey = await AnnoucementController.fetchTokenKeyForUser(username);
+    if (!tokenkey || tokenkey !== setTokenkey) {
+      return SendErrorTokenkey(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
+    }    
+
+    try {
+      const sqlQuery = "select atdtid, aicmid, tgadid, code, audience, customerfull, customercode, customername, COALESCE(cus_email, 'N/A') AS cusEmail, createdate, createby from announcementdetailTargetaudience where aicmid = $1 order by atdtid asc";
+      const queryParams = [aicmid];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err)
+          return sendError400(res, EMessage.ErrorSelect, err);
+        if (!result.rows || result.rows.length === 0)
+          return SendError400(res, EMessage.NotFound);
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });    
 
     } catch (error) {
-      console.log("error: ", error);
+      // console.log("Error in fectannouncementdetailtargetaudiencebyAicmid:", error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
