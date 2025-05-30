@@ -912,7 +912,7 @@ export default class AnnoucementController {
         searchEnddate === ""
       ) {
         sqlQuery =
-          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND statusName LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
+          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND astid = $3 order by createdate desc LIMIT $1 OFFSET $2";
         queryParams.push(limit, offset, searchStatus);
       } else if (
         searchtext === "" &&
@@ -951,11 +951,7 @@ export default class AnnoucementController {
         }
 
         if (!result.rows || result.rows.length === 0) {
-          return SendError(
-            res,
-            404,
-            EMessage.NotFound + " No ticket details found"
-          );
+          return SendError400(res, EMessage.NotFound);
         }
         return SendSuccess(res, SMessage.SelectAll, result.rows);
       });
