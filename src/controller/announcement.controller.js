@@ -864,7 +864,9 @@ export default class AnnoucementController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(username);
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+        username
+      );
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -897,13 +899,13 @@ export default class AnnoucementController {
           "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' order by createdate desc LIMIT $1 OFFSET $2";
         queryParams.push(limit, offset);
       } else if (
-        (searchtext !== "") ||
+        searchtext !== "" ||
         (searchStatus === "" && searchStartdate === "" && searchEnddate === "")
       ) {
         sqlQuery =
           "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND (titlename LIKE $3 OR reasontext LIKE $3 OR anouncementcode LIKE $3 OR statuscode LIKE $3 OR statusname LIKE $3) order by createdate desc LIMIT $1 OFFSET $2";
         queryParams.push(limit, offset, `%${searchtext}%`);
-      }else if (
+      } else if (
         searchtext === "" &&
         searchStatus !== "" &&
         searchStartdate === "" &&
@@ -967,27 +969,175 @@ export default class AnnoucementController {
     const { aicmid } = req.query;
 
     if (!username || !setTokenkey || !aicmid) {
-        return sendError400(res, "Missing username in query parameters");
+      return sendError400(res, "Missing username in query parameters");
     }
     const tokenkey = await AnnoucementController.fetchTokenKeyForUser(username);
     if (!tokenkey || tokenkey !== setTokenkey) {
-      return SendErrorTokenkey(res, 401, EMessage.Unauthorized, "Token key not found or invalid for user");
-    }    
+      return SendErrorTokenkey(
+        res,
+        401,
+        EMessage.Unauthorized,
+        "Token key not found or invalid for user"
+      );
+    }
 
     try {
-      const sqlQuery = "select atdtid, aicmid, tgadid, code, audience, customerfull, customercode, customername, COALESCE(cus_email, 'N/A') AS cusEmail, createdate, createby from announcementdetailTargetaudience where aicmid = $1 order by atdtid asc";
+      const sqlQuery =
+        "select atdtid, aicmid, tgadid, code, audience, customerfull, customercode, customername, COALESCE(cus_email, 'N/A') AS cusEmail, createdate, createby from announcementdetailTargetaudience where aicmid = $1 order by atdtid asc";
       const queryParams = [aicmid];
       connected.query(sqlQuery, queryParams, (err, result) => {
-        if (err)
-          return sendError400(res, EMessage.ErrorSelect, err);
+        if (err) return sendError400(res, EMessage.ErrorSelect, err);
         if (!result.rows || result.rows.length === 0)
           return SendError400(res, EMessage.NotFound);
         return SendSuccess(res, SMessage.SelectAll, result.rows);
-      });    
-
+      });
     } catch (error) {
       // console.log("Error in fectannouncementdetailtargetaudiencebyAicmid:", error);
       return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async readannouncementdetail(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { aicmid } = req.body;
+
+    if (!username || !setTokenkey || !aicmid)
+      return SendError400(res, "Missing username in query parameters");
+    try {
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+        username
+      );
+      if (!tokenkey || tokenkey !== setTokenkey)
+        return SendError400(res, EMessage.Unauthorized);
+
+      const sqlquery =
+        "Insert into announcementsread (aicmid, createby, createdate) Values ($1, $2, Now())";
+      const queryParams = [aicmid, username];
+      connected.query(sqlquery, queryParams, (err, result) => {
+        if (err) return SendError(res, 500, EMessage.ErrorInsert, err);
+        return SendCreate(res, 200, SMessage.Insert);
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showreadannouncementdetail(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { aicmid } = req.body;
+
+    if (!username || !setTokenkey || !aicmid)
+      return SendError400(res, "Missing username in query parameters");
+    try {
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+        username
+      );
+      if (!tokenkey || tokenkey !== setTokenkey)
+        return SendError400(res, EMessage.Unauthorized);
+
+      const sqlquery =
+        "select n.aicmid, n.titlename, n.reasontext, n.anid, n.anouncementcode, n.astid, n.statuscode, n.statusname, n.tgadid, n.audience_code, n.audience_name, r.createby as readby, r.createdate as readdate from announcementdetails n inner join announcementsread r on r.aicmid = n.aicmid  where n.aicmid = $1 and r.createby = $2";
+      const queryParams = [aicmid, username];
+      connected.query(sqlquery, queryParams, (err, result) => {
+        if (err) return SendError(res, 500, EMessage.ErrorSelect, err);
+        if (!result.rows || result.rows.length === 0)
+          return SendError400(res, EMessage.NotFound, +" Do not read.");
+
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showreadannouncementdetailbytargetaudienceincusid(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { cusid } = req.body;
+
+    if (!username || !setTokenkey || !cusid)
+      return SendError400(res, "Missing username in query parameters");
+    try {
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+        username
+      );
+      if (!tokenkey || tokenkey !== setTokenkey)
+        return SendError400(res, EMessage.Unauthorized);
+
+      const sqlquery =
+        "select * from vm_announcementdetailsbytargetaudienceactive where cusid = $1";
+      const queryParams = [cusid];
+      connected.query(sqlquery, queryParams, (err, result) => {
+        if (err) return SendError(res, 500, EMessage.ErrorSelect, err);
+        if (!result.rows || result.rows.length === 0)
+          return SendError400(res, EMessage.NotFound, +" Do not read.");
+
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async updateannouncementdetailsServer(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { aicmid, btndelete, titleName, reasonText, astid, tgadid, startdate, enddate, scheduledate, schedulehour } = req.body;
+
+    if (!aicmid)
+      return SendError400(res, "Missing username in query parameters");
+    try {
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+        username
+      );
+      if (setTokenkey !== tokenkey || !setTokenkey)
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
+
+      // const sqlquery = "";
+      //this is update data
+      if (btndelete === "Y") {
+        //this is for delete data
+        const sqlquery =
+          "Update announcementdetails SET active = 'N' where aicmid = $1";
+        const queryParams = [aicmid];
+        connected.query(sqlquery, queryParams, (err, dbResult) => { // Renamed 'res' to 'dbResult'
+          if (err) return SendError(res, 500, EMessage.ErrorUpdate, err);
+          return SendCreate(res, 200, SMessage.Delete);
+        });
+      } 
+
+      if (btndelete === ""){
+        //this is for update
+        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+        const image_url = await UploadImageToServer(imageFile.data);
+        if (!image_url) {
+          return SendError400(res, EMessage.ErrorUploadImage);
+        }
+        const sqlquery = "Call pd_updateannouncementdetails($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
+        const queryParams = [
+          aicmid,
+          titleName.trim(),
+          reasonText.trim(),
+          astid,
+          tgadid,
+          startdate || null,
+          enddate || null,
+          username,
+          scheduledate || null,
+          schedulehour || null,
+          image_url
+        ];
+        connected.query(sqlquery, queryParams, (err, result) => {
+          if (err) return SendError(res, 500, EMessage.ErrorUpdate, err);
+          return SendCreate(res, 200, SMessage.Update);
+        });
+      }
+    } catch (error) {
+      //console.log("Error in updateannouncementdetails:", error);
+      SendError(res, 500, EMessage.ServerError, error);
     }
   }
 }

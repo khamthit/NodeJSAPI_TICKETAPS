@@ -75,6 +75,10 @@ router.post("/Announcement/DeleteAnnouncementStatus", AnnoucementController.dele
 router.post("/Announcement/NewAnnouncementDetails", AnnoucementController.newannouncementdetails);
 router.get("/Announcement/GetAnnouncementDetails", AnnoucementController.showannouncementdetails);
 router.get("/Announcement/GetAnnouncementTargetAudienceByAnouncementId", AnnoucementController.fectannouncementdetailtargetaudiencebyAicmid);
+router.post("/Announcement/ReadAnnouncementDetail", AnnoucementController.readannouncementdetail);
+router.get("/Announcement/ShowAnnouncementRead", AnnoucementController.showreadannouncementdetail);
+router.get("/Announcement/GetAnnouncementDetailsbyCusId", AnnoucementController.showreadannouncementdetailbytargetaudienceincusid);
+router.post("/Announcement/UpdateAnnouncementDetail", AnnoucementController.updateannouncementdetailsServer);
 
 
 export default router;

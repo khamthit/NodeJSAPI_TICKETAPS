@@ -2,7 +2,7 @@ export const SendCreate = (res, statusCode, message,data)=>{
     res.status(201).json({success: true, statusCode, message,data})
 }
 export const SendSuccess =(res,message,data)=>{
-    res.status(200).json({success: true, statusCode: 200,message,data});
+    res.status(200).json({success: true, statusCode: 200, message, data});
 }
 export const SendError400 = (res, message,error)=>{
     res.status(400).json({success: false, statusCode:400, message,error,data:{}}) // Bad Request
