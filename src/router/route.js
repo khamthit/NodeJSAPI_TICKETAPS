@@ -74,6 +74,7 @@ router.post("/Announcement/UpdateAnnouncementStatus", AnnoucementController.upda
 router.post("/Announcement/DeleteAnnouncementStatus", AnnoucementController.deleteannouncementstatus);
 router.post("/Announcement/NewAnnouncementDetails", AnnoucementController.newannouncementdetails);
 router.get("/Announcement/GetAnnouncementDetails", AnnoucementController.showannouncementdetails);
+router.get("/Announcement/GetAnnouncementDetailsAdmin", AnnoucementController.showannouncementdetailsAdmin);
 router.get("/Announcement/GetAnnouncementTargetAudienceByAnouncementId", AnnoucementController.fectannouncementdetailtargetaudiencebyAicmid);
 router.post("/Announcement/ReadAnnouncementDetail", AnnoucementController.readannouncementdetail);
 router.get("/Announcement/ShowAnnouncementRead", AnnoucementController.showreadannouncementdetail);

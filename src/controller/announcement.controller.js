@@ -757,7 +757,7 @@ export default class AnnoucementController {
 
       if (req.files && req.files.fileattach) {
         const imageFile = req.files.fileattach; // imageFile is the uploaded file object
-        const uploadedImageUrl = await UploadImageToServer(imageFile.data);
+        const uploadedImageUrl = await UploadImageToServer(imageFile); // Pass the whole file object
 
         if (!uploadedImageUrl) {
           // If a file was provided but upload failed, it's an error.
@@ -938,6 +938,98 @@ export default class AnnoucementController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUserAirLine(username);
+      if (!tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+      if (setTokenkey !== tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
+      }
+      // Parse and validate page and limit
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+      const offset = (page - 1) * limit;      
+      const selectFields = "aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active";
+      const fromTable = "announcementdetails";      
+      let effectiveWhereClauses = ["active = 'Y'"];
+      const queryParamsForWhere = []; // Parameters for the WHERE clause (used by both count and data queries)
+      let placeholderIndex = 1;
+      if (searchtext) {
+        effectiveWhereClauses.push(`(titlename ILIKE $${placeholderIndex} OR reasontext ILIKE $${placeholderIndex} OR anouncementcode ILIKE $${placeholderIndex} OR statuscode ILIKE $${placeholderIndex} OR statusname ILIKE $${placeholderIndex})`);
+        queryParamsForWhere.push(`%${searchtext}%`);
+        placeholderIndex++;
+      }
+      if (searchStatus) { // Assuming searchStatus is for astid (status ID)
+        effectiveWhereClauses.push(`astid = $${placeholderIndex}`);
+        queryParamsForWhere.push(searchStatus);
+        placeholderIndex++;
+      }
+      if (searchStartdate && searchEnddate) {
+        effectiveWhereClauses.push(`createdate >= $${placeholderIndex}`);
+        queryParamsForWhere.push(searchStartdate);
+        placeholderIndex++;
+        effectiveWhereClauses.push(`createdate <= $${placeholderIndex}`);
+        queryParamsForWhere.push(searchEnddate + " " + "23:59:59.999999");
+        placeholderIndex++;
+      }      
+      const whereClauseString = effectiveWhereClauses.join(" AND ");      
+      const countSql = `SELECT COUNT(*) AS total_count FROM ${fromTable} WHERE ${whereClauseString}`;
+      connected.query(countSql, queryParamsForWhere, (countErr, countResult) => {
+        if (countErr) {
+          console.error("Error fetching announcement count:", countErr);
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorSelect || "Error fetching announcement count",
+            countErr
+          );
+        }        
+        const totalCount = parseInt(countResult.rows[0].total_count, 10);
+        const totalPages = Math.ceil(totalCount / limit);
+        if (page > totalPages) {
+             return SendSuccessDisplay(res, EMessage.NotFound, [], totalPages, totalCount);
+        }        
+        const dataSql = `SELECT ${selectFields} FROM ${fromTable} WHERE ${whereClauseString} ORDER BY createdate DESC LIMIT $${placeholderIndex} OFFSET $${placeholderIndex + 1}`;
+        const queryParamsForData = [...queryParamsForWhere, limit, offset];
+
+        connected.query(dataSql, queryParamsForData, (err, dataResult) => {
+          if (err) return SendError400(res, EMessage.ErrorSelect, err); 
+          return SendSuccessDisplay(res, SMessage.SelectAll, dataResult.rows, totalPages, totalCount);
+
+        });
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, "An unexpected error occurred.");
+    }
+  }
+
+  static async showannouncementdetailsAdmin(req, res) {
+    const { username, setTokenkey } = req.query;
+    let { // Changed to let for parsing
+      page = 1,
+      limit = 10,
+      searchtext = "",
+      searchStatus = "", // Assuming this corresponds to astid
+      searchStartdate = "",
+      searchEnddate = "",
+    } = req.query;
+
+    if (!username || !setTokenkey) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
       const tokenkey = await AnnoucementController.fetchTokenKeyForUser(username);
       if (!tokenkey) {
         return SendErrorTokenkey(
@@ -1060,8 +1152,7 @@ export default class AnnoucementController {
       if (!tokenkey || tokenkey !== setTokenkey)
         return SendError400(res, EMessage.Unauthorized);
 
-      const sqlquery =
-        "Insert into announcementsread (aicmid, createby, createdate) Values ($1, $2, Now())";
+      const sqlquery = "Update announcementsread set readstatus = 'Read' Where aicmid = $1 and createby = $2";
       const queryParams = [aicmid, username];
       connected.query(sqlquery, queryParams, (err, result) => {
         if (err) return SendError(res, 500, EMessage.ErrorInsert, err);
@@ -1087,7 +1178,7 @@ export default class AnnoucementController {
     if (!username || !setTokenkey || !aicmid)
       return SendError400(res, "Missing username in query parameters");
     try {
-      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUserAirLine(
         username
       );
       if (!tokenkey || tokenkey !== setTokenkey)
@@ -1121,9 +1212,9 @@ export default class AnnoucementController {
       
       if (!tokenkey || tokenkey !== setTokenkey)
         return SendError400(res, EMessage.Unauthorized);
-      const sqlquery = "select * from vm_announcementdetailsbytargetaudienceactive order by createdate desc";
-      
-      connected.query(sqlquery, (err, result) => {
+      const sqlquery = "Select * from vm_announcementdetailbyAirline  where createby = $1 order by aicmid desc"
+      const queryParams = [username];
+      connected.query(sqlquery, queryParams, (err, result) => {
         if (err) return SendError(res, 500, EMessage.ErrorSelect, err);
         if (!result.rows || result.rows.length === 0)
           return SendError400(res, EMessage.NotFound);
@@ -1157,20 +1248,26 @@ export default class AnnoucementController {
       if (btndelete === "Y") {
         //this is for delete data
         const sqlquery =
-          "Update announcementdetails SET active = 'N' where aicmid = $1";
+          "Call pd_delAnnouncementDetails($1)";
         const queryParams = [aicmid];
         connected.query(sqlquery, queryParams, (err, dbResult) => { // Renamed 'res' to 'dbResult'
           if (err) return SendError(res, 500, EMessage.ErrorUpdate, err);
           return SendCreate(res, 200, SMessage.Delete);
         });
+
       } 
 
       if (btndelete === ""){
         //this is for update
-        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
-        const image_url = await UploadImageToServer(imageFile.data);
-        if (!image_url) {
-          return SendError400(res, EMessage.ErrorUploadImage);
+        let attachment_url_update = null; // Default to null if no new file
+        if (req.files && req.files.fileattach) {
+          const attachedFileUpdate = req.files.fileattach;
+          const uploadedFileUrlUpdate = await UploadImageToServer(attachedFileUpdate); // Pass the whole file object
+          if (!uploadedFileUrlUpdate) {
+            return SendError400(res, EMessage.ErrorUploadImage + " - File attachment upload failed for update.");
+          }
+          attachment_url_update = uploadedFileUrlUpdate;
+        } else {
         }
         const sqlquery = "Call pd_updateannouncementdetails($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
         const queryParams = [
@@ -1184,7 +1281,7 @@ export default class AnnoucementController {
           username,
           scheduledate || null,
           schedulehour || null,
-          image_url
+          attachment_url_update // Pass the new or existing file URL
         ];
         connected.query(sqlquery, queryParams, (err, result) => {
           if (err) return SendError(res, 500, EMessage.ErrorUpdate, err);

@@ -40,6 +40,27 @@ export default class TicketController {
     });
   }
 
+   static async fetchTokenKeyForUserAirLine(username) {
+    return new Promise((resolve, reject) => {
+      if (!username) {
+        return resolve(null);
+      }
+      const sqlQuery = `select "tokenKey" from "UsersAirline" where "userEmail" = $1 and "statusId" = 1`;
+      connected.query(sqlQuery, [username], (err, result) => {
+        if (err) {
+          return reject(
+            new Error("Database query failed while fetching token key.")
+          );
+        }
+        if (!result || !result.rows || result.rows.length === 0) {
+          return resolve(null);
+        }
+        //  console.log("Tokenkey found:", result.rows[0].tokenKey);
+        resolve(result.rows[0].tokenKey);
+      });
+    });
+  }
+
   static async saveLogsystem(username, action, details) {
     // 'async' keyword can be removed if not using 'await' inside
     return new Promise((resolve, reject) => {
@@ -352,7 +373,7 @@ export default class TicketController {
       if (req.files && req.files.fileattach) {
         const imageFile = req.files.fileattach;
         try {
-          const uploadedUrl = await UploadImageToServer(imageFile.data);
+          const uploadedUrl = await UploadImageToServer(imageFile);
           if (!uploadedUrl) {
             return SendError400(res, EMessage.ErrorUploadImage + " - Upload returned no URL.");
           }
@@ -527,7 +548,7 @@ export default class TicketController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
