@@ -8,6 +8,7 @@ import {
   SendError400,
   SendSuccess,
   SendErrorTokenkey,
+  SendSuccessDisplay,
 } from "../service/response.js";
 import { ValidateData } from "../service/validate.js";
 import { UploadImageToServer } from "../config/cloudinary.js";
@@ -312,7 +313,6 @@ export default class TicketController {
   static async createticketdetail(req, res) {
     const { username, setTokenkey } = req.query;
     const { subject, email, tcid, ptid, descriptions } = req.body;
-    // Comprehensive check for required fields
     if (
       !username ||
       !setTokenkey ||
@@ -322,13 +322,11 @@ export default class TicketController {
       !ptid ||
       !descriptions
     ) {
-      // If a file was uploaded despite missing fields, attempt to clean it up.
       return SendError400(
         res,
         "Missing required fields in request query or body."
       );
     }
-
     try {
       const tokenkey = await TicketController.fetchTokenKeyForUser(username);
       if (!tokenkey) {
@@ -339,7 +337,6 @@ export default class TicketController {
           "Token key not found or invalid for user"
         );
       }
-
       if (setTokenkey !== tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -348,24 +345,28 @@ export default class TicketController {
           "Token key mismatch"
         );
       }
-      //image
-      const image = req.files;
-      // console.log("Image:", image.Image.name);
-      const imagename = image.fileattach.name;
-      const imageDataBuffer = image.fileattach.data;
-      // console.log("Image Data Buffer:", imageDataBuffer);
-      // console.log("Image Name:", imagename);
-      // console.log("imagedata:", image.fileattach.data)
-      const image_url = await UploadImageToServer(image.fileattach.data);
-      if (!image) return SendError400(res, EMessage.BadRequest + " Image");
-      if (!image_url) return SendError400(res, EMessage.ErrorUploadImage);
+
+      let image_url = null; // Initialize image_url to null or an empty string
+
+      // Optional Image Upload Handling
+      if (req.files && req.files.fileattach) {
+        const imageFile = req.files.fileattach;
+        try {
+          const uploadedUrl = await UploadImageToServer(imageFile.data);
+          if (!uploadedUrl) {
+            return SendError400(res, EMessage.ErrorUploadImage + " - Upload returned no URL.");
+          }
+          image_url = uploadedUrl;
+        } catch (uploadError) {
+          console.error("Error uploading image to server:", uploadError);
+          return SendError(res, 500, EMessage.ErrorUploadImage, uploadError.message || "Failed to process image upload.");
+        }
+      }
 
       const validationErrors = ValidateData({ subject, descriptions });
       if (validationErrors.length > 0) {
         return SendError400(res, validationErrors);
       }
-
-      console.log("Image Name:", image_url);
 
       const sqlQuery = "Call pd_TicketDetails($1, $2, $3, $4, $5, $6, $7)";
       // Ensure tcid and ptid are parsed as integers if your DB expects that
@@ -375,7 +376,7 @@ export default class TicketController {
         parseInt(tcid, 10),
         parseInt(ptid, 10),
         descriptions.trim(),
-        image_url, // This is already just the filename from multer, or null
+        image_url, // This will be the URL from UploadImageToServer or null/empty if no image
         username,
       ];
       connected.query(sqlQuery, queryParams, (err, result) => {
@@ -390,14 +391,14 @@ export default class TicketController {
         return SendCreate(res, 200, "Created", SMessage.Insert);
       });
     } catch (error) {
-      //console.error("Error in createticketdetail:", error);
+      console.error("Error in createticketdetail:", error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
 
   static async showticketDetails(req, res) {
     const { username, setTokenkey } = req.query;
-    const {
+    let { // Changed to let for parsing
       page = 1,
       limit = 10,
       searchtext = "",
@@ -411,7 +412,7 @@ export default class TicketController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username); // Corrected class name
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -430,93 +431,88 @@ export default class TicketController {
         );
       }
 
+      // Parse and validate page and limit
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+
       const offset = (page - 1) * limit;
-      let sqlQuery = "";
-      const queryParams = [];
+      
+      const selectFields = "*"; 
+      const fromTable = "vm_ticketdetails";
+      
+      let effectiveWhereClauses = ["active = 'Y'"];
+      const queryParamsForWhere = []; 
+      let placeholderIndexForWhere = 1; 
 
-      if (
-        searchtext === "" &&
-        searchCategory === "" &&
-        searchStatus === "" &&
-        searchStartdate === "" &&
-        searchEnddate === ""
-      ) {
-        sqlQuery =
-          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset);
-      } else if (
-        (searchtext !== "" && searchCategory === "") ||
-        (searchStatus === "" && searchStartdate === "" && searchEnddate === "")
-      ) {
-        sqlQuery =
-          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND (subject ILIKE $3 OR email ILIKE $3) order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset, `%${searchtext}%`);
-      } else if (
-        searchtext === "" &&
-        searchCategory !== "" &&
-        searchStatus === "" &&
-        searchStartdate === "" &&
-        searchEnddate === ""
-      ) {
-        sqlQuery =
-          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND categorycode LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset, searchCategory);
-      } else if (
-        searchtext === "" &&
-        searchCategory === "" &&
-        searchStatus !== "" &&
-        searchStartdate === "" &&
-        searchEnddate === ""
-      ) {
-        sqlQuery =
-          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND statusName LIKE $3 order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset, searchStatus);
-      } else if (
-        searchtext === "" &&
-        searchCategory === "" &&
-        searchStatus === "" &&
-        searchStartdate !== "" &&
-        searchEnddate !== ""
-      ) {
-        sqlQuery =
-          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND createdate >= $3 AND createdate <= $4 order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(
-          limit,
-          offset,
-          searchStartdate,
-          searchEnddate + " " + "23:59:59.999999"
-        );
-      } else {
-        sqlQuery =
-          "SELECT * FROM vm_ticketdetails WHERE active = 'Y' AND (ticketcode LIKE $3 OR statusName LIKE $4 OR createdate >= $5 AND createdate <= $6) order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(
-          limit,
-          offset,
-          searchCategory,
-          searchStatus,
-          searchStartdate,
-          searchEnddate + " " + "23:59:59.999999"
-        );
+      if (searchtext) {
+        effectiveWhereClauses.push(`(subject ILIKE $${placeholderIndexForWhere} OR email ILIKE $${placeholderIndexForWhere} OR ticketcode ILIKE $${placeholderIndexForWhere})`);
+        queryParamsForWhere.push(`%${searchtext}%`);
+        placeholderIndexForWhere++;
       }
+      if (searchCategory) { 
+        effectiveWhereClauses.push(`categorycode ILIKE $${placeholderIndexForWhere}`); 
+        queryParamsForWhere.push(`%${searchCategory}%`); 
+        placeholderIndexForWhere++;
+      }
+      if (searchStatus) { 
+        effectiveWhereClauses.push(`statusName ILIKE $${placeholderIndexForWhere}`); 
+        queryParamsForWhere.push(`%${searchStatus}%`); 
+        placeholderIndexForWhere++;
+      }
+      if (searchStartdate && searchEnddate) {
+        effectiveWhereClauses.push(`createdate >= $${placeholderIndexForWhere}`);
+        queryParamsForWhere.push(searchStartdate);
+        placeholderIndexForWhere++;
+        effectiveWhereClauses.push(`createdate <= $${placeholderIndexForWhere}`);
+        queryParamsForWhere.push(searchEnddate + " " + "23:59:59.999999");
+        placeholderIndexForWhere++;
+      }
+      
+      const whereClauseString = effectiveWhereClauses.join(" AND ");
+      
+      const countSql = `SELECT COUNT(*) AS total_count FROM ${fromTable} WHERE ${whereClauseString}`;
 
-      connected.query(sqlQuery, queryParams, (err, result) => {
-        if (err) {
+      connected.query(countSql, queryParamsForWhere, (countErr, countResult) => {
+        if (countErr) {
+          console.error("Error fetching ticket details count:", countErr);
           return SendError(
             res,
             500,
-            EMessage.NotFound || "Error fetching ticket details",
-            err
+            EMessage.ErrorSelect || "Error fetching ticket details count",
+            countErr
           );
+        }
+        
+        const totalCount = parseInt(countResult.rows[0].total_count, 10);
+        const totalPages = Math.ceil(totalCount / limit);
+
+        if (totalCount === 0) {
+          return SendSuccessDisplay(res, SMessage.SelectAll, [], 0, 0);
         }
 
-        if (!result.rows || result.rows.length === 0) {
-          return SendError(
-            res,
-            404,
-            EMessage.NotFound + " No ticket details found"
-          );
+        // If page requested is out of bounds, return empty data for that page but correct pagination info
+        if (page > totalPages) {
+             return SendSuccessDisplay(res, SMessage.SelectAll, [], totalPages, totalCount);
         }
-        return SendSuccess(res, SMessage.SelectAll, result.rows);
+        
+        const dataSql = `SELECT ${selectFields} FROM ${fromTable} WHERE ${whereClauseString} ORDER BY createdate DESC LIMIT $${placeholderIndexForWhere} OFFSET $${placeholderIndexForWhere + 1}`;
+        const queryParamsForData = [...queryParamsForWhere, limit, offset];
+
+        connected.query(dataSql, queryParamsForData, (dataErr, dataResult) => {
+          if (dataErr) {
+            console.error("Error fetching ticket details:", dataErr);
+            return SendError(
+              res,
+              500,
+              EMessage.ErrorSelect || "Error fetching ticket details",
+              dataErr
+            );
+          }
+          // No need to check dataResult.rows.length here as totalCount handles the "not found" case
+          return SendSuccessDisplay(res, SMessage.SelectAll, dataResult.rows, totalPages, totalCount);
+        });
       });
     } catch (error) {
       return SendError(res, 500, EMessage.ServerError, error);
@@ -553,7 +549,6 @@ export default class TicketController {
       const queryParams = [];
       sqlQuery =
         "SELECT * FROM vm_ticketdetails WHERE active = 'Y' and (workerby = $1 or reasignby = $1) order by createdate desc LIMIT $2 OFFSET $3";
-
       queryParams.push(username, limit, offset);
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
@@ -1004,7 +999,7 @@ export default class TicketController {
 
   static async newticketdetailchatnote(req, res) {
     const { username, setTokenkey } = req.query;
-    const { tcddid, ticketCode, typeNote, noteDescription } = req.body;
+    const { tcddid, ticketCode, typeNote, noteDescription, scheduleDate, scheduleTime } = req.body;
 
     if (!username || !setTokenkey || !ticketCode || !typeNote || !noteDescription)
       return SendError400(res, "Missing username in query parameters");
@@ -1014,15 +1009,29 @@ export default class TicketController {
       return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
     try {
       /*this is save data*/
-      const sqlQuery =
-        "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y') RETURNING tdcid";
-      const queryParams = [
+      let sqlQuery = "";
+      let queryParams = [];
+      if (typeNote === "Schedule Work") { 
+        sqlQuery = "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7) RETURNING tdcid";
+        queryParams = [
         tcddid,
         ticketCode,
         typeNote,
         noteDescription,
         username,
+        scheduleDate ? scheduleDate : null, // Optional field
+        scheduleTime ? scheduleTime : null // Optional field
       ];
+      }else{
+        sqlQuery = "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y') RETURNING tdcid";
+        queryParams = [
+        tcddid,
+        ticketCode,
+        typeNote,
+        noteDescription,
+        username
+      ];
+      }              
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
           return SendError(

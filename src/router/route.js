@@ -79,6 +79,6 @@ router.post("/Announcement/ReadAnnouncementDetail", AnnoucementController.readan
 router.get("/Announcement/ShowAnnouncementRead", AnnoucementController.showreadannouncementdetail);
 router.get("/Announcement/GetAnnouncementDetailsbyCusId", AnnoucementController.showreadannouncementdetailbytargetaudienceincusid);
 router.post("/Announcement/UpdateAnnouncementDetail", AnnoucementController.updateannouncementdetailsServer);
-
+router.post("/Announcement/UpdateAnnouncementDetailActionStatus", AnnoucementController.updateannouncementdetailActionStatus);
 
 export default router;

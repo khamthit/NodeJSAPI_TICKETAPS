@@ -31,3 +31,7 @@ export const SendErrorTokenkey = (res, statusCode, message, error)=>{
 export const SendSuccessAndFectDataAnnouncement =(res, audience, titlename, reasonText, startdate, enddate, scheduledate, message, data)=>{
     res.status(200).json({success: true, statusCode: 200, audience, titlename, reasonText, startdate, enddate, scheduledate, message, data});
 }
+
+export const SendSuccessDisplay =(res,message,data, totalpage, totaldata)=>{
+    res.status(200).json({success: true, statusCode: 200, message, data, totalpage, totaldata});
+}

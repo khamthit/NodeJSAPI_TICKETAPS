@@ -9,6 +9,7 @@ import {
   SendErrorTokenkey,
   SendDuplicateData,
   SendSuccessAndFectDataAnnouncement,
+  SendSuccessDisplay
 } from "../service/response.js";
 import { ValidateData } from "../service/validate.js";
 import { UploadImageToServer } from "../config/cloudinary.js";
@@ -165,7 +166,63 @@ export default class AnnoucementController {
         }
       });
     } catch (error) {
-      console.error("Error in showgroupline:", error);
+      //console.error("Error in showgroupline:", error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async updateannouncementdetailActionStatus(req, res){
+    const { username, setTokenkey } = req.query;
+    const { aicmid, actionStatus } = req.body;
+
+    if (!username || !setTokenkey || !aicmid || !actionStatus) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+
+    try {
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+        username
+      );
+      if (!tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
+      }
+      let sqlQuery = "";
+      if (actionStatus !== "Delete") {
+        sqlQuery = "UPDATE announcementdetails SET statuscode = $1::varchar(255), statusname = $1::varchar(255) Where aicmid = $2";        
+      }else{
+        sqlQuery = "UPDATE announcementdetails SET statuscode = $1::varchar(255), statusname = $1::varchar(255), active = 'N' Where aicmid = $2";
+      }      
+      const queryParams = [actionStatus, aicmid];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorUpdate || "Error updating announcement details",
+            err
+          );
+        }
+        return SendCreate(
+          res,
+          200,
+          "Updated announcement detail status",
+          SMessage.Update
+        );
+      });
+    } catch (error) {
+      console.error("Error in updateannouncementdetailActionStatus:", error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
@@ -536,12 +593,10 @@ export default class AnnoucementController {
       if (setTokenkey !== tokenkey) {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
-
       const validationErrors = ValidateData({ code, statusname });
       if (validationErrors.length > 0) {
         return SendError400(res, validationErrors);
       }
-
       const sqlQuery =
         "UPDATE announcementstatus SET code = $1, statusname = $2 WHERE astid = $3";
       const queryParams = [code.trim(), statusname.trim(), astid];
@@ -628,6 +683,8 @@ export default class AnnoucementController {
     }
   }
 
+
+
   static async newannouncementdetails(req, res) {
     const { username, setTokenkey } = req.query;
     const {
@@ -675,25 +732,23 @@ export default class AnnoucementController {
       }
 
       // Image Upload Handling
-      if (!req.files || !req.files.fileattach) {
-        return SendError400(
-          res,
-          EMessage.BadRequest + " - Image file 'fileattach' is missing."
-        );
-      }
-      const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+      let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
 
-      const image_url = await UploadImageToServer(imageFile.data);
-      if (!image_url) {
-        return SendError400(res, EMessage.ErrorUploadImage);
-      }
+      if (req.files && req.files.fileattach) {
+        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+        const uploadedImageUrl = await UploadImageToServer(imageFile.data);
 
+        if (!uploadedImageUrl) {
+          // If a file was provided but upload failed, it's an error.
+          return SendError400(res, EMessage.ErrorUploadImage + " - File upload failed.");
+        }
+        image_url = uploadedImageUrl;
+      }
       const validationErrors = ValidateData({ titleName, reasonText });
       if (validationErrors.length > 0) {
         return SendError400(res, validationErrors);
       }
 
-      // First Stored Procedure: Create announcement details
       const sqlQueryInsertAnnouncement =
         "CALL pd_newannouncementdetails($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0)";
       const queryParamsInsert = [
@@ -707,12 +762,11 @@ export default class AnnoucementController {
         schedulehour || null,
         username,
         image_url,
-        cus_id || null, // This corresponds to $11, the '0' is literal in the SQL
+        cus_id || null, 
       ];
 
       let get_aicmid;
 
-      // Promisify the first database call
       const resultInsert = await new Promise((resolve, reject) => {
         connected.query(
           sqlQueryInsertAnnouncement,
@@ -742,7 +796,6 @@ export default class AnnoucementController {
           "Failed to retrieve announcement ID after creation."
         );
       }
-
       if (!get_aicmid) {
         return SendError(
           res,
@@ -851,11 +904,11 @@ export default class AnnoucementController {
 
   static async showannouncementdetails(req, res) {
     const { username, setTokenkey } = req.query;
-    const {
+    let { // Changed to let for parsing
       page = 1,
       limit = 10,
       searchtext = "",
-      searchStatus = "",
+      searchStatus = "", // Assuming this corresponds to astid
       searchStartdate = "",
       searchEnddate = "",
     } = req.query;
@@ -864,9 +917,7 @@ export default class AnnoucementController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
-        username
-      );
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(username);
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -875,7 +926,6 @@ export default class AnnoucementController {
           "Token key not found or invalid for user"
         );
       }
-
       if (setTokenkey !== tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -884,79 +934,63 @@ export default class AnnoucementController {
           "Token key mismatch"
         );
       }
-
-      const offset = (page - 1) * limit;
-      let sqlQuery = "";
-      const queryParams = [];
-
-      if (
-        searchtext === "" &&
-        searchStatus === "" &&
-        searchStartdate === "" &&
-        searchEnddate === ""
-      ) {
-        sqlQuery =
-          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset);
-      } else if (
-        searchtext !== "" ||
-        (searchStatus === "" && searchStartdate === "" && searchEnddate === "")
-      ) {
-        sqlQuery =
-          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND (titlename LIKE $3 OR reasontext LIKE $3 OR anouncementcode LIKE $3 OR statuscode LIKE $3 OR statusname LIKE $3) order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset, `%${searchtext}%`);
-      } else if (
-        searchtext === "" &&
-        searchStatus !== "" &&
-        searchStartdate === "" &&
-        searchEnddate === ""
-      ) {
-        sqlQuery =
-          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND astid = $3 order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(limit, offset, searchStatus);
-      } else if (
-        searchtext === "" &&
-        searchStatus === "" &&
-        searchStartdate !== "" &&
-        searchEnddate !== ""
-      ) {
-        sqlQuery =
-          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND createdate >= $3 AND createdate <= $4 order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(
-          limit,
-          offset,
-          searchStartdate,
-          searchEnddate + " " + "23:59:59.999999"
-        );
-      } else {
-        sqlQuery =
-          "SELECT aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active FROM announcementdetails WHERE active = 'Y' AND (statusname LIKE $3 OR createdate >= $4 AND createdate <= $5) order by createdate desc LIMIT $1 OFFSET $2";
-        queryParams.push(
-          limit,
-          offset,
-          searchStatus,
-          searchStartdate,
-          searchEnddate + " " + "23:59:59.999999"
-        );
+      // Parse and validate page and limit
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+      const offset = (page - 1) * limit;      
+      const selectFields = "aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active";
+      const fromTable = "announcementdetails";      
+      let effectiveWhereClauses = ["active = 'Y'"];
+      const queryParamsForWhere = []; // Parameters for the WHERE clause (used by both count and data queries)
+      let placeholderIndex = 1;
+      if (searchtext) {
+        effectiveWhereClauses.push(`(titlename ILIKE $${placeholderIndex} OR reasontext ILIKE $${placeholderIndex} OR anouncementcode ILIKE $${placeholderIndex} OR statuscode ILIKE $${placeholderIndex} OR statusname ILIKE $${placeholderIndex})`);
+        queryParamsForWhere.push(`%${searchtext}%`);
+        placeholderIndex++;
       }
-
-      connected.query(sqlQuery, queryParams, (err, result) => {
-        if (err) {
+      if (searchStatus) { // Assuming searchStatus is for astid (status ID)
+        effectiveWhereClauses.push(`astid = $${placeholderIndex}`);
+        queryParamsForWhere.push(searchStatus);
+        placeholderIndex++;
+      }
+      if (searchStartdate && searchEnddate) {
+        effectiveWhereClauses.push(`createdate >= $${placeholderIndex}`);
+        queryParamsForWhere.push(searchStartdate);
+        placeholderIndex++;
+        effectiveWhereClauses.push(`createdate <= $${placeholderIndex}`);
+        queryParamsForWhere.push(searchEnddate + " " + "23:59:59.999999");
+        placeholderIndex++;
+      }      
+      const whereClauseString = effectiveWhereClauses.join(" AND ");      
+      const countSql = `SELECT COUNT(*) AS total_count FROM ${fromTable} WHERE ${whereClauseString}`;
+      connected.query(countSql, queryParamsForWhere, (countErr, countResult) => {
+        if (countErr) {
+          console.error("Error fetching announcement count:", countErr);
           return SendError(
             res,
             500,
-            EMessage.NotFound || "Error fetching ticket details",
-            err
+            EMessage.ErrorSelect || "Error fetching announcement count",
+            countErr
           );
-        }
+        }        
+        const totalCount = parseInt(countResult.rows[0].total_count, 10);
+        const totalPages = Math.ceil(totalCount / limit);
+        if (page > totalPages) {
+             return SendSuccessDisplay(res, EMessage.NotFound, [], totalPages, totalCount);
+        }        
+        const dataSql = `SELECT ${selectFields} FROM ${fromTable} WHERE ${whereClauseString} ORDER BY createdate DESC LIMIT $${placeholderIndex} OFFSET $${placeholderIndex + 1}`;
+        const queryParamsForData = [...queryParamsForWhere, limit, offset];
 
-        if (!result.rows || result.rows.length === 0) {
-          return SendError400(res, EMessage.NotFound);
-        }
-        return SendSuccess(res, SMessage.SelectAll, result.rows);
+        connected.query(dataSql, queryParamsForData, (err, dataResult) => {
+          if (err) return SendError400(res, EMessage.ErrorSelect, err); 
+          return SendSuccessDisplay(res, SMessage.SelectAll, dataResult.rows, totalPages, totalCount);
+
+        });
       });
     } catch (error) {
-      return SendError(res, 500, EMessage.ServerError, error);
+      return SendError(res, 500, EMessage.ServerError, "An unexpected error occurred.");
     }
   }
 
@@ -965,7 +999,7 @@ export default class AnnoucementController {
     const { aicmid } = req.query;
 
     if (!username || !setTokenkey || !aicmid) {
-      return sendError400(res, "Missing username in query parameters");
+      return SendError400(res, "Missing username in query parameters");
     }
     const tokenkey = await AnnoucementController.fetchTokenKeyForUser(username);
     if (!tokenkey || tokenkey !== setTokenkey) {
@@ -976,13 +1010,12 @@ export default class AnnoucementController {
         "Token key not found or invalid for user"
       );
     }
-
     try {
       const sqlQuery =
         "select atdtid, aicmid, tgadid, code, audience, customerfull, customercode, customername, COALESCE(cus_email, 'N/A') AS cusEmail, createdate, createby from announcementdetailTargetaudience where aicmid = $1 order by atdtid asc";
       const queryParams = [aicmid];
       connected.query(sqlQuery, queryParams, (err, result) => {
-        if (err) return sendError400(res, EMessage.ErrorSelect, err);
+        if (err) return SendError400(res, EMessage.ErrorSelect, err);
         if (!result.rows || result.rows.length === 0)
           return SendError400(res, EMessage.NotFound);
         return SendSuccess(res, SMessage.SelectAll, result.rows);
@@ -1013,6 +1046,14 @@ export default class AnnoucementController {
         if (err) return SendError(res, 500, EMessage.ErrorInsert, err);
         return SendCreate(res, 200, SMessage.Insert);
       });
+
+      /*this is save log*/
+      const savelog = await AnnoucementController.saveLogsystem(
+        username,
+        "Read Announcement",
+        `ID: ${aicmid}`
+      );
+
     } catch (error) {
       return SendError(res, 500, EMessage.ServerError, error);
     }
@@ -1091,8 +1132,6 @@ export default class AnnoucementController {
           EMessage.Unauthorized,
           "Token key mismatch"
         );
-
-      // const sqlquery = "";
       //this is update data
       if (btndelete === "Y") {
         //this is for delete data
@@ -1130,6 +1169,13 @@ export default class AnnoucementController {
           if (err) return SendError(res, 500, EMessage.ErrorUpdate, err);
           return SendCreate(res, 200, SMessage.Update);
         });
+
+        /*this is save log */
+        const savelog = await AnnoucementController.saveLogsystem(
+          username,
+          "Update Announcement",
+          `ID: ${aicmid}, titleName: ${titleName}, reasonText: ${reasonText}, astid: ${astid}, tgadid: ${tgadid}, startdate: ${startdate}, enddate: ${enddate}, scheduledate: ${scheduledate}, schedulehour: ${schedulehour}`);
+
       }
     } catch (error) {
       //console.log("Error in updateannouncementdetails:", error);
