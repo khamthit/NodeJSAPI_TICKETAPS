@@ -44,6 +44,27 @@ export default class AnnoucementController {
     });
   }
 
+  static async fetchTokenKeyForUserAirLine(username) {
+    return new Promise((resolve, reject) => {
+      if (!username) {
+        return resolve(null);
+      }
+      const sqlQuery = `select "tokenKey" from "UsersAirline" where "userEmail" = $1 and "statusId" = 1`;
+      connected.query(sqlQuery, [username], (err, result) => {
+        if (err) {
+          return reject(
+            new Error("Database query failed while fetching token key.")
+          );
+        }
+        if (!result || !result.rows || result.rows.length === 0) {
+          return resolve(null);
+        }
+        //  console.log("Tokenkey found:", result.rows[0].tokenKey);
+        resolve(result.rows[0].tokenKey);
+      });
+    });
+  }
+
   static async fectTargetaudience(tgadid) {
     return new Promise((resolve, reject) => {
       if (!tgadid) {
@@ -1033,7 +1054,7 @@ export default class AnnoucementController {
     if (!username || !setTokenkey || !aicmid)
       return SendError400(res, "Missing username in query parameters");
     try {
-      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUserAirLine(
         username
       );
       if (!tokenkey || tokenkey !== setTokenkey)
@@ -1089,28 +1110,28 @@ export default class AnnoucementController {
 
   static async showreadannouncementdetailbytargetaudienceincusid(req, res) {
     const { username, setTokenkey } = req.query;
-    const { cusid } = req.body;
+    // const { cusid } = req.body;
 
-    if (!username || !setTokenkey || !cusid)
+    if (!username || !setTokenkey)
       return SendError400(res, "Missing username in query parameters");
     try {
-      const tokenkey = await AnnoucementController.fetchTokenKeyForUser(
+      const tokenkey = await AnnoucementController.fetchTokenKeyForUserAirLine(
         username
       );
+      
       if (!tokenkey || tokenkey !== setTokenkey)
         return SendError400(res, EMessage.Unauthorized);
-
-      const sqlquery =
-        "select * from vm_announcementdetailsbytargetaudienceactive where cusid = $1";
-      const queryParams = [cusid];
-      connected.query(sqlquery, queryParams, (err, result) => {
+      const sqlquery = "select * from vm_announcementdetailsbytargetaudienceactive order by createdate desc";
+      
+      connected.query(sqlquery, (err, result) => {
         if (err) return SendError(res, 500, EMessage.ErrorSelect, err);
         if (!result.rows || result.rows.length === 0)
-          return SendError400(res, EMessage.NotFound, +" Do not read.");
+          return SendError400(res, EMessage.NotFound);
 
         return SendSuccess(res, SMessage.SelectAll, result.rows);
       });
     } catch (error) {
+      //console.error("Error in showreadannouncementdetailbytargetaudienceincusid:", error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
