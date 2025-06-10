@@ -66,6 +66,27 @@ export default class GroupAirlineController {
     });
   }
 
+   static async fetchTokenKeyForUserAirLine(username) {
+    return new Promise((resolve, reject) => {
+      if (!username) {
+        return resolve(null);
+      }
+      const sqlQuery = `select "tokenKey" from "UsersAirline" where "userEmail" = $1 and "statusId" = 1`;
+      connected.query(sqlQuery, [username], (err, result) => {
+        if (err) {
+          return reject(
+            new Error("Database query failed while fetching token key.")
+          );
+        }
+        if (!result || !result.rows || result.rows.length === 0) {
+          return resolve(null);
+        }
+        //  console.log("Tokenkey found:", result.rows[0].tokenKey);
+        resolve(result.rows[0].tokenKey);
+      });
+    });
+  }
+
   static async showgroupline(req, res) {
     const { username, setTokenkey, searchtext = "" } = req.query;
     let { page = 1, limit = 10 } = req.query;
@@ -81,6 +102,89 @@ export default class GroupAirlineController {
       if (isNaN(limit) || limit < 1) limit = 10;
 
       const tokenkey = await GroupAirlineController.fetchTokenKeyForUser(
+        username
+      );
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+
+      if (searchtext === "") {
+        sqlQuery =
+          "SELECT * FROM groupairline WHERE active = 'Y' order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset);
+      } else {
+        sqlQuery =
+          "SELECT * FROM groupairline WHERE active = 'Y' AND (code ILIKE $3 OR groupname ILIKE $3) order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, `%${searchtext}%`);
+      }
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500, // Internal Server Error for query failures
+            EMessage.ErrorSelect || "Error fetching ticket group airline",
+            err
+          );
+        }
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No ticket group airline found"
+          );
+        }
+        if (setTokenkey === tokenkey) {
+          const trimmedResult = result.rows.map((row) => {
+            return {
+              ...row,
+              tcid: row.tcid, // Assuming tcid does not need trimming or is not a string
+              code: row.code?.trim(),
+              categoryname: row.categoryname?.trim(),
+              createdate: row.createdate, // Assuming createdate does not need trimming
+              createby: row.createby, // Assuming createby does not need trimming
+            };
+          });
+          return SendSuccess(res, SMessage.SelectAll, trimmedResult);
+        } else {
+          return SendError(
+            res,
+            401,
+            EMessage.Unauthorized,
+            "Token key mismatch"
+          );
+        }
+      });
+    } catch (error) {
+      console.error("Error in showgroupline:", error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showgrouplineAirline(req, res) {
+    const { username, setTokenkey, searchtext = "" } = req.query;
+    let { page = 1, limit = 10 } = req.query;
+
+    if (!username) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+
+      const tokenkey = await GroupAirlineController.fetchTokenKeyForUserAirLine(
         username
       );
       if (!tokenkey) {
@@ -401,6 +505,102 @@ export default class GroupAirlineController {
     }
     try {
       const tokenkey = await GroupAirlineController.fetchTokenKeyForUser(
+        username
+      );
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendDuplicateData(res, EMessage.Unauthorized, "Token key mismatch");
+      }
+
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+
+      if (
+        searchtext === "" &&
+        search_startdate === "" &&
+        search_enddate === ""
+      ) {
+        sqlQuery =
+          "SELECT * FROM vm_airlinedetails order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset);
+      } else if (
+        searchtext !== "" &&
+        search_startdate === "" &&
+        search_enddate === ""
+      ) {
+        sqlQuery = `SELECT * FROM vm_airlinedetails WHERE groupcode LIKE $3 or groupname LIKE $3 or "customerFull" LIKE $3 or "customerCode" LIKE $3 or "customerName" LIKE $3 order by createdate desc LIMIT $1 OFFSET $2`;
+        queryParams.push(limit, offset, searchtext);
+      } else if (
+        searchtext === "" &&
+        search_startdate === "" &&
+        search_enddate === ""
+      ) {
+        sqlQuery =
+          "SELECT * FROM vm_airlinedetails WHERE createdate >= $3 AND createdate <= $4 order by createdate desc LIMIT $1 OFFSET $2";
+        queryParams.push(
+          limit,
+          offset,
+          search_startdate,
+          search_enddate + " " + "23:59:59.999999"
+        );
+      } else {
+        sqlQuery = `SELECT * FROM vm_airlinedetails WHERE (groupcode LIKE $3 or groupname LIKE $3 or "customerFull" LIKE $3 or "customerCode" LIKE $3 or "customerName" LIKE $3 OR createdate >= $4 AND createdate <= $5) order by createdate desc LIMIT $1 OFFSET $2`;
+        queryParams.push(
+          limit,
+          offset,
+          searchtext,
+          search_startdate,
+          search_enddate + " " + "23:59:59.999999"
+        );
+      }
+      //   console.log(sqlQuery);
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound || "Error fetching data details",
+            err
+          );
+        }
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No data details found"
+          );
+        }
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+    } catch (error) {
+      console.log("Error in showairlinedetails:", error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showairlinedetailsAirline(req, res) {
+    const { username, setTokenkey } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      searchtext = "",
+      search_startdate = "",
+      search_enddate = "",
+    } = req.query;
+    if (!username || !setTokenkey) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      const tokenkey = await GroupAirlineController.fetchTokenKeyForUserAirLine(
         username
       );
       if (!tokenkey) {

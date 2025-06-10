@@ -15,7 +15,7 @@ const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Define the destination directory for uploads
     // You might want to make this configurable or create it if it doesn't exist
-    const uploadDir = 'uploads/';
+    const uploadDir = 'assets/images';
     if (!fs.existsSync(uploadDir)){
         fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -49,19 +49,22 @@ router.post("/Ticket/UpdateStatus", TicketController.updatesystemstatus);
 router.post("/Ticket/DeleteStatus", TicketController.deletesystemstatus);
 router.get("/Ticket/GetAllStatus", TicketController.showSystemStatus);
 router.get("/Ticket/GetTicketDeailByUser", TicketController.showticketDetailsByClient);
+router.get("/Ticket/GetTicketDeailByAirline", TicketController.showticketDetailsByAirline);
 router.post("/Ticket/NewTicketDetailChateNote", TicketController.newticketdetailchatnote);
 router.get("/Ticket/GetTicketDetailChatNote", TicketController.showticketdetailschatnote);
-
+router.get("/Ticket/GetTicketDetailChatNoteAirline", TicketController.showticketdetailschatnoteAirline);
 router.get("/Priority/GetAllPriority", PriorityController.showPriority);
 router.post("/Priority/NewPriority", PriorityController.createPriority);
 router.post("/Priority/UpdatePriority", PriorityController.updatePriority);
 router.post("/Priority/DeletePriority", PriorityController.deletePriority);
 router.get("/GroupAirline/GetAllAirline", GroupAirlineController.showgroupline);
+router.get("/GroupAirline/GetAllAirlineAirline", GroupAirlineController.showgrouplineAirline);
 router.post("/GroupAirline/NewGroupAirline", GroupAirlineController.creategroupline);
 router.post("/GroupAirline/DeleteGroupAirline", GroupAirlineController.deletegroupline);
 router.post("/GroupAirline/UpdateGroupAirline", GroupAirlineController.updategroupline);
 router.post("/GroupAirLine/NewGroupAirLineDetails", GroupAirlineController.newairlinedetails);
 router.get("/GroupAirline/GetGroupAirlineDetails", GroupAirlineController.showairlinedetails);
+router.get("/GroupAirline/GetGroupAirlineDetailsAirline", GroupAirlineController.showairlinedetailsAirline);
 router.post("/GroupAirline/UpdateGroupAirlineDetails", GroupAirlineController.updategroupairlinedetails);
 router.post("/GroupAirline/DeleteGroupAirlineDetails", GroupAirlineController.deletegroupairlinedetails);
 router.get("/Announcement/GetAllTargetaudience", AnnoucementController.showannouncement);
@@ -75,11 +78,16 @@ router.post("/Announcement/DeleteAnnouncementStatus", AnnoucementController.dele
 router.post("/Announcement/NewAnnouncementDetails", AnnoucementController.newannouncementdetails);
 router.get("/Announcement/GetAnnouncementDetails", AnnoucementController.showannouncementdetails);
 router.get("/Announcement/GetAnnouncementDetailsAdmin", AnnoucementController.showannouncementdetailsAdmin);
+router.get("/Announcement/GetAnnouncementDetailsAirline", AnnoucementController.showannouncementbyAirline);
+router.get("/Announcement/GetAnnouncementDetailsAirlineUnread", AnnoucementController.showannouncementbyAirlineUnread);
 router.get("/Announcement/GetAnnouncementTargetAudienceByAnouncementId", AnnoucementController.fectannouncementdetailtargetaudiencebyAicmid);
 router.post("/Announcement/ReadAnnouncementDetail", AnnoucementController.readannouncementdetail);
 router.get("/Announcement/ShowAnnouncementRead", AnnoucementController.showreadannouncementdetail);
 router.get("/Announcement/GetAnnouncementDetailsbyCusId", AnnoucementController.showreadannouncementdetailbytargetaudienceincusid);
 router.post("/Announcement/UpdateAnnouncementDetail", AnnoucementController.updateannouncementdetailsServer);
 router.post("/Announcement/UpdateAnnouncementDetailActionStatus", AnnoucementController.updateannouncementdetailActionStatus);
+router.get("/TicketCategory/GetAllCategoryAirline", TicketController.showTicketCategoryairline);
+router.get("/Priority/GetAllPriorityAirline", PriorityController.showPriorityAirline);
+router.get("/Ticket/GetAllStatusAirline", TicketController.showSystemStatusairline);
 
 export default router;

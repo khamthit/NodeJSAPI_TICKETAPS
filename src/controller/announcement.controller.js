@@ -1,6 +1,5 @@
 import connected from "../config/db.js";
 import { EMessage, SMessage } from "../service/message.js";
-import { UploadImageToCloud } from "../config/cloudinary.js";
 import {
   SendCreate,
   SendError,
@@ -12,9 +11,10 @@ import {
   SendSuccessDisplay
 } from "../service/response.js";
 import { ValidateData } from "../service/validate.js";
-import { UploadImageToServer } from "../config/cloudinary.js";
+import { UploadImageToServer, UploadImageAnnouncementToServer } from "../config/cloudinary.js";
 import fs from "fs";
 import path from "path"; // Import the 'path' module
+
 import { Console, group } from "console";
 import { connect } from "http2";
 import { start } from "repl";
@@ -753,18 +753,23 @@ export default class AnnoucementController {
       }
 
       // Image Upload Handling
-      let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
-
+       let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
       if (req.files && req.files.fileattach) {
         const imageFile = req.files.fileattach; // imageFile is the uploaded file object
-        const uploadedImageUrl = await UploadImageToServer(imageFile); // Pass the whole file object
+        console.log("Image file received:", imageFile); // Debugging log
+          const uploadedImageUrl = await UploadImageAnnouncementToServer(imageFile);
+          if (!uploadedImageUrl) {
+            // If a file was provided but upload failed, it's an error.
+            return SendError400(
+              res,
+              EMessage.ErrorUploadImage + " - File upload failed."
+            );
+          }
+          image_url = uploadedImageUrl;
+          console.log("Image URL after upload:", imageFile); // Debugging log
+      }  
+      console.log("Image URL:", req.files);
 
-        if (!uploadedImageUrl) {
-          // If a file was provided but upload failed, it's an error.
-          return SendError400(res, EMessage.ErrorUploadImage + " - File upload failed.");
-        }
-        image_url = uploadedImageUrl;
-      }
       const validationErrors = ValidateData({ titleName, reasonText });
       if (validationErrors.length > 0) {
         return SendError400(res, validationErrors);
@@ -962,7 +967,7 @@ export default class AnnoucementController {
       if (isNaN(limit) || limit < 1) limit = 10;
       const offset = (page - 1) * limit;      
       const selectFields = "aicmid, titlename, reasontext, anid, anouncementcode, astid, statuscode, statusname, tgadid, audience_code, audience_name, cus_id, startdate, enddate, createby, scheduledate, schedulehour, attachfile, createdate, active";
-      const fromTable = "announcementdetails";      
+      const fromTable = "vm_announcementdetailbyAirline";      
       let effectiveWhereClauses = ["active = 'Y'"];
       const queryParamsForWhere = []; // Parameters for the WHERE clause (used by both count and data queries)
       let placeholderIndex = 1;
@@ -1106,6 +1111,71 @@ export default class AnnoucementController {
       return SendError(res, 500, EMessage.ServerError, "An unexpected error occurred.");
     }
   }
+
+  static async showannouncementbyAirline(req, res) {
+    const { username, setTokenkey } = req.query;
+    if (!username || !setTokenkey) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    const tokenkey = await AnnoucementController.fetchTokenKeyForUserAirLine(username);
+    if (!tokenkey || tokenkey !== setTokenkey) {
+      return SendErrorTokenkey(
+        res,
+        401,
+        EMessage.Unauthorized,
+        "Token key not found or invalid for user"
+      );
+    }
+    try {
+       const sqlQuery =
+        "select * from vm_announcementdetailbyAirline where createby = $1 order by createdate desc";
+      const queryParams = [username];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) return SendError400(res, EMessage.ErrorSelect, err);
+        if (!result.rows || result.rows.length === 0)
+          return SendError400(res, EMessage.NotFound);
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+
+    } catch (error) {
+      console.error("Error in showannouncementbyAirline:", error);
+      return SendError(res, 500, EMessage.ServerError, error);
+      
+    }
+  }
+
+  static async showannouncementbyAirlineUnread(req, res) {
+    const { username, setTokenkey } = req.query;
+    if (!username || !setTokenkey) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    const tokenkey = await AnnoucementController.fetchTokenKeyForUserAirLine(username);
+    if (!tokenkey || tokenkey !== setTokenkey) {
+      return SendErrorTokenkey(
+        res,
+        401,
+        EMessage.Unauthorized,
+        "Token key not found or invalid for user"
+      );
+    }
+    try {
+       const sqlQuery =
+        "select * from vm_announcementdetailbyAirline where createby = $1 and readstatus = 'Not Read' order by createdate desc";
+      const queryParams = [username];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) return SendError400(res, EMessage.ErrorSelect, err);
+        if (!result.rows || result.rows.length === 0)
+          return SendError400(res, EMessage.NotFound);
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+
+    } catch (error) {
+      console.error("Error in showannouncementbyAirline:", error);
+      return SendError(res, 500, EMessage.ServerError, error);
+      
+    }
+  }
+
 
   static async fectannouncementdetailtargetaudiencebyAicmid(req, res) {
     const { username, setTokenkey } = req.query;

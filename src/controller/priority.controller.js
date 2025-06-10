@@ -32,6 +32,28 @@ export default class PriorityController {
     });
   }
 
+   static async fetchTokenKeyForUserAirLine(username) {
+    return new Promise((resolve, reject) => {
+      if (!username) {
+        return resolve(null);
+      }
+      const sqlQuery = `select "tokenKey" from "UsersAirline" where "userEmail" = $1 and "statusId" = 1`;
+      connected.query(sqlQuery, [username], (err, result) => {
+        if (err) {
+          return reject(
+            new Error("Database query failed while fetching token key.")
+          );
+        }
+        if (!result || !result.rows || result.rows.length === 0) {
+          return resolve(null);
+        }
+        //  console.log("Tokenkey found:", result.rows[0].tokenKey);
+        resolve(result.rows[0].tokenKey);
+      });
+    });
+  }
+
+
   static async showPriority(req, res) {
     const { username, setTokenkey, searchtext = "" } = req.query;
     let { page = 1, limit = 10 } = req.query;
@@ -47,6 +69,75 @@ export default class PriorityController {
       if (isNaN(limit) || limit < 1) limit = 10;
 
       const tokenkey = await PriorityController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+      //this is check tokenkey
+      if (setTokenkey !== tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      const offset = (page - 1) * limit;
+      const sqlQuery =
+        "SELECT * FROM priority WHERE (code LIKE $1 OR priority LIKE $1) ORDER BY ptid LIMIT $2 OFFSET $3";
+      const values = [`%${searchtext}%`, limit, offset];
+      connected.query(sqlQuery, values, (err, result) => {
+        if (err) {
+          console.error("Error executing query:", err);
+          return SendError(res, 500, EMessage.InternalServerError);
+        }
+        const totalCountQuery =
+          "SELECT COUNT(*) FROM priority WHERE active = 'Y' AND (code LIKE $1 OR priority ILIKE $1)";
+        connected.query(
+          totalCountQuery,
+          [`%${searchtext}%`],
+          (errCount, resultCount) => {
+            if (errCount) {
+              console.error("Error executing count query:", errCount);
+              return SendError(res, 500, EMessage.InternalServerError);
+            }
+            const totalCount = parseInt(resultCount.rows[0].count, 10);
+            const totalPages = Math.ceil(totalCount / limit);
+
+            if (result.rows.length === 0) {
+              return SendError(res, 404, EMessage.NotFound);
+            } else {
+              return SendSuccess(res, SMessage.SelectAll, result.rows);
+            }
+          }
+        );
+      });
+    } catch (error) {
+      console.error("Error in showTicketCategory:", error);
+      return SendError(res, 500, EMessage.InternalServerError);
+    }
+  }
+
+  static async showPriorityAirline(req, res) {
+    const { username, setTokenkey, searchtext = "" } = req.query;
+    let { page = 1, limit = 10 } = req.query;
+
+    if (!username) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+
+      const tokenkey = await PriorityController.fetchTokenKeyForUserAirLine(username);
       if (!tokenkey) {
         return SendError(
           res,

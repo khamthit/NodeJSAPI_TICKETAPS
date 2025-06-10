@@ -1,6 +1,6 @@
 import connected from "../config/db.js";
 import { EMessage, SMessage } from "../service/message.js";
-import { UploadImageToCloud } from "../config/cloudinary.js";
+import { UploadImageTicketChatNoteToServer } from "../config/cloudinary.js";
 import {
   SendCreate,
   SendDuplicateData,
@@ -40,7 +40,7 @@ export default class TicketController {
     });
   }
 
-   static async fetchTokenKeyForUserAirLine(username) {
+  static async fetchTokenKeyForUserAirLine(username) {
     return new Promise((resolve, reject) => {
       if (!username) {
         return resolve(null);
@@ -75,7 +75,7 @@ export default class TicketController {
             console.error("Error saving log system:", err);
             return reject(err); // IMPORTANT: Reject the promise on error
           }
-          console.log("Log saved successfully for user:", username);
+          //console.log("Log saved successfully for user:", username);
           return resolve(result); // IMPORTANT: Resolve the promise on success
         });
       } catch (error) {
@@ -101,6 +101,86 @@ export default class TicketController {
       if (isNaN(limit) || limit < 1) limit = 10;
 
       const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+
+      if (searchtext === "") {
+        sqlQuery =
+          "SELECT * FROM ticketcategory WHERE active = 'Y' order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset);
+      } else {
+        sqlQuery =
+          "SELECT * FROM ticketcategory WHERE active = 'Y' AND (code ILIKE $3 OR categoryname ILIKE $3) order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, `%${searchtext}%`);
+      }
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500, // Internal Server Error for query failures
+            EMessage.ErrorSelect || "Error fetching ticket categories",
+            err
+          );
+        }
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No ticket categories found"
+          );
+        }
+        if (setTokenkey === tokenkey) {
+          const trimmedResult = result.rows.map((row) => {
+            return {
+              ...row,
+              tcid: row.tcid, // Assuming tcid does not need trimming or is not a string
+              code: row.code?.trim(),
+              categoryname: row.categoryname?.trim(),
+              createdate: row.createdate, // Assuming createdate does not need trimming
+              createby: row.createby, // Assuming createby does not need trimming
+            };
+          });
+          return SendSuccess(res, SMessage.SelectAll, trimmedResult);
+        } else {
+          return SendError(
+            res,
+            401,
+            EMessage.Unauthorized,
+            "Token key mismatch"
+          );
+        }
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showTicketCategoryairline(req, res) {
+    const { username, setTokenkey, searchtext = "" } = req.query;
+    let { page = 1, limit = 10 } = req.query;
+
+    if (!username) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
       if (!tokenkey) {
         return SendError(
           res,
@@ -349,7 +429,7 @@ export default class TicketController {
       );
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -367,22 +447,22 @@ export default class TicketController {
         );
       }
 
-      let image_url = null; // Initialize image_url to null or an empty string
+      let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
 
-      // Optional Image Upload Handling
       if (req.files && req.files.fileattach) {
-        const imageFile = req.files.fileattach;
-        try {
-          const uploadedUrl = await UploadImageToServer(imageFile);
-          if (!uploadedUrl) {
-            return SendError400(res, EMessage.ErrorUploadImage + " - Upload returned no URL.");
+        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+          const uploadedImageUrl = await UploadImageToServer(imageFile);
+          if (!uploadedImageUrl) {
+            // If a file was provided but upload failed, it's an error.
+            return SendError400(
+              res,
+              EMessage.ErrorUploadImage + " - File upload failed."
+            );
           }
-          image_url = uploadedUrl;
-        } catch (uploadError) {
-          console.error("Error uploading image to server:", uploadError);
-          return SendError(res, 500, EMessage.ErrorUploadImage, uploadError.message || "Failed to process image upload.");
-        }
+          image_url = uploadedImageUrl;
+          console.log("Image URL after upload:", req.files); // Debugging log
       }
+      
 
       const validationErrors = ValidateData({ subject, descriptions });
       if (validationErrors.length > 0) {
@@ -419,7 +499,8 @@ export default class TicketController {
 
   static async showticketDetails(req, res) {
     const { username, setTokenkey } = req.query;
-    let { // Changed to let for parsing
+    let {
+      // Changed to let for parsing
       page = 1,
       limit = 10,
       searchtext = "",
@@ -459,82 +540,114 @@ export default class TicketController {
       if (isNaN(limit) || limit < 1) limit = 10;
 
       const offset = (page - 1) * limit;
-      
-      const selectFields = "*"; 
+
+      const selectFields = "*";
       const fromTable = "vm_ticketdetails";
-      
+
       let effectiveWhereClauses = ["active = 'Y'"];
-      const queryParamsForWhere = []; 
-      let placeholderIndexForWhere = 1; 
+      const queryParamsForWhere = [];
+      let placeholderIndexForWhere = 1;
 
       if (searchtext) {
-        effectiveWhereClauses.push(`(subject ILIKE $${placeholderIndexForWhere} OR email ILIKE $${placeholderIndexForWhere} OR ticketcode ILIKE $${placeholderIndexForWhere})`);
+        effectiveWhereClauses.push(
+          `(subject ILIKE $${placeholderIndexForWhere} OR email ILIKE $${placeholderIndexForWhere} OR ticketcode ILIKE $${placeholderIndexForWhere})`
+        );
         queryParamsForWhere.push(`%${searchtext}%`);
         placeholderIndexForWhere++;
       }
-      if (searchCategory) { 
-        effectiveWhereClauses.push(`categorycode ILIKE $${placeholderIndexForWhere}`); 
-        queryParamsForWhere.push(`%${searchCategory}%`); 
+      if (searchCategory) {
+        effectiveWhereClauses.push(
+          `categorycode ILIKE $${placeholderIndexForWhere}`
+        );
+        queryParamsForWhere.push(`%${searchCategory}%`);
         placeholderIndexForWhere++;
       }
-      if (searchStatus) { 
-        effectiveWhereClauses.push(`statusName ILIKE $${placeholderIndexForWhere}`); 
-        queryParamsForWhere.push(`%${searchStatus}%`); 
+      if (searchStatus) {
+        effectiveWhereClauses.push(
+          `statusName ILIKE $${placeholderIndexForWhere}`
+        );
+        queryParamsForWhere.push(`%${searchStatus}%`);
         placeholderIndexForWhere++;
       }
       if (searchStartdate && searchEnddate) {
-        effectiveWhereClauses.push(`createdate >= $${placeholderIndexForWhere}`);
+        effectiveWhereClauses.push(
+          `createdate >= $${placeholderIndexForWhere}`
+        );
         queryParamsForWhere.push(searchStartdate);
         placeholderIndexForWhere++;
-        effectiveWhereClauses.push(`createdate <= $${placeholderIndexForWhere}`);
+        effectiveWhereClauses.push(
+          `createdate <= $${placeholderIndexForWhere}`
+        );
         queryParamsForWhere.push(searchEnddate + " " + "23:59:59.999999");
         placeholderIndexForWhere++;
       }
-      
+
       const whereClauseString = effectiveWhereClauses.join(" AND ");
-      
+
       const countSql = `SELECT COUNT(*) AS total_count FROM ${fromTable} WHERE ${whereClauseString}`;
 
-      connected.query(countSql, queryParamsForWhere, (countErr, countResult) => {
-        if (countErr) {
-          console.error("Error fetching ticket details count:", countErr);
-          return SendError(
-            res,
-            500,
-            EMessage.ErrorSelect || "Error fetching ticket details count",
-            countErr
-          );
-        }
-        
-        const totalCount = parseInt(countResult.rows[0].total_count, 10);
-        const totalPages = Math.ceil(totalCount / limit);
-
-        if (totalCount === 0) {
-          return SendSuccessDisplay(res, SMessage.SelectAll, [], 0, 0);
-        }
-
-        // If page requested is out of bounds, return empty data for that page but correct pagination info
-        if (page > totalPages) {
-             return SendSuccessDisplay(res, SMessage.SelectAll, [], totalPages, totalCount);
-        }
-        
-        const dataSql = `SELECT ${selectFields} FROM ${fromTable} WHERE ${whereClauseString} ORDER BY createdate DESC LIMIT $${placeholderIndexForWhere} OFFSET $${placeholderIndexForWhere + 1}`;
-        const queryParamsForData = [...queryParamsForWhere, limit, offset];
-
-        connected.query(dataSql, queryParamsForData, (dataErr, dataResult) => {
-          if (dataErr) {
-            console.error("Error fetching ticket details:", dataErr);
+      connected.query(
+        countSql,
+        queryParamsForWhere,
+        (countErr, countResult) => {
+          if (countErr) {
+            console.error("Error fetching ticket details count:", countErr);
             return SendError(
               res,
               500,
-              EMessage.ErrorSelect || "Error fetching ticket details",
-              dataErr
+              EMessage.ErrorSelect || "Error fetching ticket details count",
+              countErr
             );
           }
-          // No need to check dataResult.rows.length here as totalCount handles the "not found" case
-          return SendSuccessDisplay(res, SMessage.SelectAll, dataResult.rows, totalPages, totalCount);
-        });
-      });
+
+          const totalCount = parseInt(countResult.rows[0].total_count, 10);
+          const totalPages = Math.ceil(totalCount / limit);
+
+          if (totalCount === 0) {
+            return SendSuccessDisplay(res, SMessage.SelectAll, [], 0, 0);
+          }
+
+          // If page requested is out of bounds, return empty data for that page but correct pagination info
+          if (page > totalPages) {
+            return SendSuccessDisplay(
+              res,
+              SMessage.SelectAll,
+              [],
+              totalPages,
+              totalCount
+            );
+          }
+
+          const dataSql = `SELECT ${selectFields} FROM ${fromTable} WHERE ${whereClauseString} ORDER BY createdate DESC LIMIT $${placeholderIndexForWhere} OFFSET $${
+            placeholderIndexForWhere + 1
+          }`;
+          const queryParamsForData = [...queryParamsForWhere, limit, offset];
+
+          connected.query(
+            dataSql,
+            queryParamsForData,
+            (dataErr, dataResult) => {
+              if (dataErr) {
+                console.error("Error fetching ticket details:", dataErr);
+                return SendError(
+                  res,
+                  500,
+                  EMessage.ErrorSelect || "Error fetching ticket details",
+                  dataErr
+                );
+              }
+              // No need to check dataResult.rows.length here as totalCount handles the "not found" case
+              return SendSuccessDisplay(
+                res,
+                SMessage.SelectAll,
+                dataResult.rows,
+                totalPages,
+                totalCount
+              );
+            }
+          );
+        }
+      );
     } catch (error) {
       return SendError(res, 500, EMessage.ServerError, error);
     }
@@ -548,7 +661,9 @@ export default class TicketController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+        username
+      );
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -570,6 +685,64 @@ export default class TicketController {
       const queryParams = [];
       sqlQuery =
         "SELECT * FROM vm_ticketdetails WHERE active = 'Y' and (workerby = $1 or reasignby = $1) order by createdate desc LIMIT $2 OFFSET $3";
+      queryParams.push(username, limit, offset);
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.NotFound || "Error fetching ticket details",
+            err
+          );
+        }
+
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No ticket details found"
+          );
+        }
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+    } catch (error) {
+      Console.log(error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+  static async showticketDetailsByAirline(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { page = 1, limit = 10 } = req.query;
+
+    if (!username || !setTokenkey) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+        username
+      );
+      if (!tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+      if (setTokenkey !== tokenkey) {
+        return SendErrorTokenkey(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key mismatch"
+        );
+      }
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+      sqlQuery =
+        "SELECT * FROM vm_ticketdetails WHERE active = 'Y' and (createby = $1) order by createdate desc LIMIT $2 OFFSET $3";
       queryParams.push(username, limit, offset);
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
@@ -1018,41 +1191,157 @@ export default class TicketController {
     }
   }
 
+  static async showSystemStatusairline(req, res) {
+    const { username, setTokenkey, searchtext = "" } = req.query;
+    let { page = 1, limit = 10 } = req.query;
+
+    if (!username) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
+
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      const offset = (page - 1) * limit;
+      let sqlQuery = "";
+      const queryParams = [];
+
+      if (searchtext === "") {
+        sqlQuery =
+          "SELECT * FROM systemstatus WHERE active = 'Y' order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset);
+      } else {
+        sqlQuery =
+          "SELECT * FROM systemstatus WHERE active = 'Y' AND (code ILIKE $3 OR statusname ILIKE $3) order by code asc LIMIT $1 OFFSET $2";
+        queryParams.push(limit, offset, `%${searchtext}%`);
+      }
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500, // Internal Server Error for query failures
+            EMessage.ErrorSelect || "Error fetching ticket categories",
+            err
+          );
+        }
+        if (!result.rows || result.rows.length === 0) {
+          return SendError(
+            res,
+            404,
+            EMessage.NotFound + " No ticket categories found"
+          );
+        }
+        if (setTokenkey === tokenkey) {
+          const trimmedResult = result.rows.map((row) => {
+            return {
+              ...row,
+              stid: row.stid, // Assuming tcid does not need trimming or is not a string
+              code: row.code?.trim(),
+              statusname: row.statusname?.trim(),
+              createdate: row.createdate, // Assuming createdate does not need trimming
+              createby: row.createby, // Assuming createby does not need trimming
+            };
+          });
+          return SendSuccess(res, SMessage.SelectAll, trimmedResult);
+        } else {
+          return SendError(
+            res,
+            401,
+            EMessage.Unauthorized,
+            "Token key mismatch"
+          );
+        }
+      });
+    } catch (error) {
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
   static async newticketdetailchatnote(req, res) {
     const { username, setTokenkey } = req.query;
-    const { tcddid, ticketCode, typeNote, noteDescription, scheduleDate, scheduleTime } = req.body;
+    const {
+      tcddid,
+      ticketCode,
+      typeNote,
+      noteDescription,
+      scheduleDate,
+      scheduleTime,
+    } = req.body;
 
-    if (!username || !setTokenkey || !ticketCode || !typeNote || !noteDescription)
+    if (
+      !username ||
+      !setTokenkey ||
+      !ticketCode ||
+      !typeNote ||
+      !noteDescription
+    )
       return SendError400(res, "Missing username in query parameters");
 
-    const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+    const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
     if (!tokenkey || setTokenkey !== tokenkey)
       return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
     try {
       /*this is save data*/
       let sqlQuery = "";
       let queryParams = [];
-      if (typeNote === "Schedule Work") { 
-        sqlQuery = "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7) RETURNING tdcid";
+      if (typeNote === "Schedule Work") {
+        sqlQuery =
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7) RETURNING tdcid";
         queryParams = [
-        tcddid,
-        ticketCode,
-        typeNote,
-        noteDescription,
-        username,
-        scheduleDate ? scheduleDate : null, // Optional field
-        scheduleTime ? scheduleTime : null // Optional field
-      ];
-      }else{
-        sqlQuery = "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y') RETURNING tdcid";
+          tcddid,
+          ticketCode,
+          typeNote,
+          noteDescription,
+          username,
+          scheduleDate ? scheduleDate : null, // Optional field
+          scheduleTime ? scheduleTime : null, // Optional field
+        ];
+      } else {
+        // Image Upload Handling
+        let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
+
+      if (req.files && req.files.fileattach) {
+        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+        console.log("Image file received:", imageFile); // Debugging log
+          const uploadedImageUrl = await UploadImageTicketChatNoteToServer(imageFile);
+          if (!uploadedImageUrl) {
+            // If a file was provided but upload failed, it's an error.
+            return SendError400(
+              res,
+              EMessage.ErrorUploadImage + " - File upload failed."
+            );
+          }
+          image_url = uploadedImageUrl;
+          console.log("Image URL after upload:", imageFile); // Debugging log
+      }  
+      console.log("Image URL:", req.files);
+
+        sqlQuery =
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6) RETURNING tdcid";
         queryParams = [
-        tcddid,
-        ticketCode,
-        typeNote,
-        noteDescription,
-        username
-      ];
-      }              
+          tcddid,
+          ticketCode,
+          typeNote,
+          noteDescription,
+          username,
+          image_url, // This will be the URL from UploadImageToServer or an empty string if no file was uploaded
+        ];
+      }
+
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
           return SendError(
@@ -1064,21 +1353,20 @@ export default class TicketController {
         }
         return SendCreate(res, 200, "Created", SMessage.Insert);
       });
-      
+
       /*this is save log*/
       const savelog = await TicketController.saveLogsystem(
         username,
         "New Ticket Detail Chat Note",
         `Ticket Code: ${ticketCode}, Type Note: ${typeNote}, Note Description: ${noteDescription}`
       );
-
     } catch (error) {
       Console.log(error);
       SendError(res, 500, EMessage.ServerError, error);
     }
   }
 
-  static async showticketdetailschatnote (req, res){
+  static async showticketdetailschatnote(req, res) {
     const { username, setTokenkey } = req.query;
     const { page = 1, limit = 10, ticketcode = "" } = req.query;
 
@@ -1088,7 +1376,8 @@ export default class TicketController {
       const tokenkey = await TicketController.fetchTokenKeyForUser(username);
       if (!tokenkey || setTokenkey !== tokenkey)
         return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
-      const sqlQuery = "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by createdate desc LIMIT $2 OFFSET $3";
+      const sqlQuery =
+        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by createdate desc LIMIT $2 OFFSET $3";
       const queryParams = [ticketcode, limit, (page - 1) * limit];
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
@@ -1100,19 +1389,44 @@ export default class TicketController {
           );
         }
         if (!result.rows || result.rows.length === 0) {
-          return SendError400(
-            res,
-            EMessage.ErrorSelect
-          );
+          return SendError400(res, EMessage.ErrorSelect);
         }
         return SendSuccess(res, SMessage.SelectAll, result.rows);
       });
-
     } catch (error) {
       SendError(res, 500, EMessage.ServerError, error);
     }
-
   }
 
+  static async showticketdetailschatnoteAirline(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { page = 1, limit = 10, ticketcode = "" } = req.query;
 
+    if (!username || !setTokenkey)
+      return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      if (!tokenkey || setTokenkey !== tokenkey)
+        return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
+      const sqlQuery =
+        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by createdate desc LIMIT $2 OFFSET $3";
+      const queryParams = [ticketcode, limit, (page - 1) * limit];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorSelect || "Error fetching ticket details chat note",
+            err
+          );
+        }
+        if (!result.rows || result.rows.length === 0) {
+          return SendError400(res, EMessage.ErrorSelect);
+        }
+        return SendSuccess(res, SMessage.SelectAll, result.rows);
+      });
+    } catch (error) {
+      SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
 }
