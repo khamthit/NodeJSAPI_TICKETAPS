@@ -461,8 +461,7 @@ export default class TicketController {
           }
           image_url = uploadedImageUrl;
           console.log("Image URL after upload:", req.files); // Debugging log
-      }
-      
+      }      
 
       const validationErrors = ValidateData({ subject, descriptions });
       if (validationErrors.length > 0) {
@@ -1463,7 +1462,7 @@ export default class TicketController {
 
   static async showticketdetailschatnote(req, res) {
     const { username, setTokenkey } = req.query;
-    const { page = 1, limit = 10, ticketcode = "" } = req.query;
+    const {ticketcode = "" } = req.query;
 
     if (!username || !setTokenkey)
       return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
@@ -1472,8 +1471,8 @@ export default class TicketController {
       if (!tokenkey || setTokenkey !== tokenkey)
         return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
       const sqlQuery =
-        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by tdcid asc LIMIT $2 OFFSET $3";
-      const queryParams = [ticketcode, limit, (page - 1) * limit];
+        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by tdcid asc";
+      const queryParams = [ticketcode];
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
           return SendError(
@@ -1495,7 +1494,7 @@ export default class TicketController {
 
   static async showticketdetailschatnoteAirline(req, res) {
     const { username, setTokenkey } = req.query;
-    const { page = 1, limit = 10, ticketcode = "" } = req.query;
+    const { ticketcode = "" } = req.query;
 
     if (!username || !setTokenkey)
       return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
@@ -1504,8 +1503,8 @@ export default class TicketController {
       if (!tokenkey || setTokenkey !== tokenkey)
         return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
       const sqlQuery =
-        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by tdcid asc LIMIT $2 OFFSET $3";
-      const queryParams = [ticketcode, limit, (page - 1) * limit];
+        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by tdcid asc";
+      const queryParams = [ticketcode];
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
           return SendError(
