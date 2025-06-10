@@ -1366,6 +1366,101 @@ export default class TicketController {
     }
   }
 
+  static async newticketdetailchatnoteAdmin(req, res) {
+    const { username, setTokenkey } = req.query;
+    const {
+      tcddid,
+      ticketCode,
+      typeNote,
+      noteDescription,
+      scheduleDate,
+      scheduleTime,
+    } = req.body;
+
+    if (
+      !username ||
+      !setTokenkey ||
+      !ticketCode ||
+      !typeNote ||
+      !noteDescription
+    )
+      return SendError400(res, "Missing username in query parameters");
+
+    const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+    if (!tokenkey || setTokenkey !== tokenkey)
+      return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
+    try {
+      /*this is save data*/
+      let sqlQuery = "";
+      let queryParams = [];
+      if (typeNote === "Schedule Work") {
+        sqlQuery =
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7) RETURNING tdcid";
+        queryParams = [
+          tcddid,
+          ticketCode,
+          typeNote,
+          noteDescription,
+          username,
+          scheduleDate ? scheduleDate : null, // Optional field
+          scheduleTime ? scheduleTime : null, // Optional field
+        ];
+      } else {
+        // Image Upload Handling
+        let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
+
+      if (req.files && req.files.fileattach) {
+        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+        console.log("Image file received:", imageFile); // Debugging log
+          const uploadedImageUrl = await UploadImageTicketChatNoteToServer(imageFile);
+          if (!uploadedImageUrl) {
+            // If a file was provided but upload failed, it's an error.
+            return SendError400(
+              res,
+              EMessage.ErrorUploadImage + " - File upload failed."
+            );
+          }
+          image_url = uploadedImageUrl;
+          console.log("Image URL after upload:", imageFile); // Debugging log
+      }  
+      console.log("Image URL:", req.files);
+
+        sqlQuery =
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6) RETURNING tdcid";
+        queryParams = [
+          tcddid,
+          ticketCode,
+          typeNote,
+          noteDescription,
+          username,
+          image_url, // This will be the URL from UploadImageToServer or an empty string if no file was uploaded
+        ];
+      }
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorInsert || "Error creating ticket details chat note",
+            err
+          );
+        }
+        return SendCreate(res, 200, "Created", SMessage.Insert);
+      });
+
+      /*this is save log*/
+      const savelog = await TicketController.saveLogsystem(
+        username,
+        "New Ticket Detail Chat Note",
+        `Ticket Code: ${ticketCode}, Type Note: ${typeNote}, Note Description: ${noteDescription}`
+      );
+    } catch (error) {
+      Console.log(error);
+      SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
   static async showticketdetailschatnote(req, res) {
     const { username, setTokenkey } = req.query;
     const { page = 1, limit = 10, ticketcode = "" } = req.query;

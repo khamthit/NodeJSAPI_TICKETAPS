@@ -40,7 +40,6 @@ router.post("/TicketCategory/NewTicketCategory", TicketController.createTicketCa
 router.post("/TicketCategory/UpdateTicketCategory", TicketController.updateTicketCategory);
 router.post("/TicketCategory/DeleteTicketCategory", TicketController.deleteTicketCategory);
 router.post("/Ticket/NewticketDetails", TicketController.createticketdetail);
-router.get("/Ticket/GetTicketDetails", TicketController.showticketDetails);
 router.post("/Ticket/UpdateStatusTicketDetails", TicketController.ticketchangestatus);
 router.post("/Ticket/TicketDetailsReassign", TicketController.ticketdetailsreassign);
 router.post("/Ticket/OpenImage", TicketController.openImage);
@@ -49,8 +48,11 @@ router.post("/Ticket/UpdateStatus", TicketController.updatesystemstatus);
 router.post("/Ticket/DeleteStatus", TicketController.deletesystemstatus);
 router.get("/Ticket/GetAllStatus", TicketController.showSystemStatus);
 
+router.get("/Ticket/GetTicketDetails", TicketController.showticketDetails);
 router.get("/Ticket/GetTicketDeailByUser", TicketController.showticketDetailsByAdmin);
 router.get("/Ticket/GetTicketDeailByAirline", TicketController.showticketDetailsByAirline);
+
+router.post("/Ticket/NewTicketDetailChateNoteAdmin", TicketController.newticketdetailchatnoteAdmin);
 
 router.post("/Ticket/NewTicketDetailChateNote", TicketController.newticketdetailchatnote);
 router.get("/Ticket/GetTicketDetailChatNote", TicketController.showticketdetailschatnote);
