@@ -1300,7 +1300,7 @@ export default class TicketController {
       let queryParams = [];
       if (typeNote === "Schedule Work") {
         sqlQuery =
-          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7) RETURNING tdcid";
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime, typesent) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7, 'AIRLINE') RETURNING tdcid";
         queryParams = [
           tcddid,
           ticketCode,
@@ -1331,7 +1331,7 @@ export default class TicketController {
       console.log("Image URL:", req.files);
 
         sqlQuery =
-          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6) RETURNING tdcid";
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile, typesent) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, 'AIRLINE') RETURNING tdcid";
         queryParams = [
           tcddid,
           ticketCode,
@@ -1395,7 +1395,7 @@ export default class TicketController {
       let queryParams = [];
       if (typeNote === "Schedule Work") {
         sqlQuery =
-          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7) RETURNING tdcid";
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, scheduledate, scheduletime, typesent) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, $7, 'ADMIN') RETURNING tdcid";
         queryParams = [
           tcddid,
           ticketCode,
@@ -1426,7 +1426,7 @@ export default class TicketController {
       console.log("Image URL:", req.files);
 
         sqlQuery =
-          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6) RETURNING tdcid";
+          "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile, typesent) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, 'ADMIN') RETURNING tdcid";
         queryParams = [
           tcddid,
           ticketCode,
@@ -1472,7 +1472,7 @@ export default class TicketController {
       if (!tokenkey || setTokenkey !== tokenkey)
         return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
       const sqlQuery =
-        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by createdate desc LIMIT $2 OFFSET $3";
+        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by tdcid asc LIMIT $2 OFFSET $3";
       const queryParams = [ticketcode, limit, (page - 1) * limit];
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
@@ -1504,7 +1504,7 @@ export default class TicketController {
       if (!tokenkey || setTokenkey !== tokenkey)
         return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
       const sqlQuery =
-        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by createdate desc LIMIT $2 OFFSET $3";
+        "Select * from ticketdetailschatnote where active = 'Y' and ticketcode = $1 order by tdcid asc LIMIT $2 OFFSET $3";
       const queryParams = [ticketcode, limit, (page - 1) * limit];
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
