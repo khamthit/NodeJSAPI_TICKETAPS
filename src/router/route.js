@@ -48,8 +48,10 @@ router.post("/Ticket/NewStatus", TicketController.createsystemstatus);
 router.post("/Ticket/UpdateStatus", TicketController.updatesystemstatus);
 router.post("/Ticket/DeleteStatus", TicketController.deletesystemstatus);
 router.get("/Ticket/GetAllStatus", TicketController.showSystemStatus);
-router.get("/Ticket/GetTicketDeailByUser", TicketController.showticketDetailsByClient);
+
+router.get("/Ticket/GetTicketDeailByUser", TicketController.showticketDetailsByAdmin);
 router.get("/Ticket/GetTicketDeailByAirline", TicketController.showticketDetailsByAirline);
+
 router.post("/Ticket/NewTicketDetailChateNote", TicketController.newticketdetailchatnote);
 router.get("/Ticket/GetTicketDetailChatNote", TicketController.showticketdetailschatnote);
 router.get("/Ticket/GetTicketDetailChatNoteAirline", TicketController.showticketdetailschatnoteAirline);
@@ -76,9 +78,13 @@ router.post("/Announcement/NewAnnouncementStatus", AnnoucementController.createa
 router.post("/Announcement/UpdateAnnouncementStatus", AnnoucementController.updateannouncementstatus);
 router.post("/Announcement/DeleteAnnouncementStatus", AnnoucementController.deleteannouncementstatus);
 router.post("/Announcement/NewAnnouncementDetails", AnnoucementController.newannouncementdetails);
+
 router.get("/Announcement/GetAnnouncementDetails", AnnoucementController.showannouncementdetails);
+
 router.get("/Announcement/GetAnnouncementDetailsAdmin", AnnoucementController.showannouncementdetailsAdmin);
+
 router.get("/Announcement/GetAnnouncementDetailsAirline", AnnoucementController.showannouncementbyAirline);
+
 router.get("/Announcement/GetAnnouncementDetailsAirlineUnread", AnnoucementController.showannouncementbyAirlineUnread);
 router.get("/Announcement/GetAnnouncementTargetAudienceByAnouncementId", AnnoucementController.fectannouncementdetailtargetaudiencebyAicmid);
 router.post("/Announcement/ReadAnnouncementDetail", AnnoucementController.readannouncementdetail);

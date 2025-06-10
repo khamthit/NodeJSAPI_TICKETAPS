@@ -977,7 +977,7 @@ export default class AnnoucementController {
         placeholderIndex++;
       }
       if (searchStatus) { // Assuming searchStatus is for astid (status ID)
-        effectiveWhereClauses.push(`astid = $${placeholderIndex}`);
+        effectiveWhereClauses.push(`astid = $${placeholderIndex}`); // Use the correct column name from the view
         queryParamsForWhere.push(searchStatus);
         placeholderIndex++;
       }

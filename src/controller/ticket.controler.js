@@ -653,7 +653,7 @@ export default class TicketController {
     }
   }
 
-  static async showticketDetailsByClient(req, res) {
+  static async showticketDetailsByAdmin(req, res) {
     const { username, setTokenkey } = req.query;
     const { page = 1, limit = 10 } = req.query;
 
@@ -661,7 +661,7 @@ export default class TicketController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+      const tokenkey = await TicketController.fetchTokenKeyForUser(
         username
       );
       if (!tokenkey) {
