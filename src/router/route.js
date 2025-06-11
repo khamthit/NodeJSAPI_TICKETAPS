@@ -97,5 +97,6 @@ router.post("/Announcement/UpdateAnnouncementDetailActionStatus", AnnoucementCon
 router.get("/TicketCategory/GetAllCategoryAirline", TicketController.showTicketCategoryairline);
 router.get("/Priority/GetAllPriorityAirline", PriorityController.showPriorityAirline);
 router.get("/Ticket/GetAllStatusAirline", TicketController.showSystemStatusairline);
-
+router.post("/Ticket/DeleteTicketChatnoteAirline", TicketController.deleteticketdetailschatnoteAirline);
+router.post("/Ticket/DeleteTicketChatnoteAdmin", TicketController.deleteticketdetailschatnoteAdmin);
 export default router;

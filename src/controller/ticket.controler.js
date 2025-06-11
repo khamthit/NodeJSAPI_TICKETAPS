@@ -1523,4 +1523,111 @@ export default class TicketController {
       SendError(res, 500, EMessage.ServerError, error);
     }
   }
+
+  static async deleteticketdetailschatnoteAirline(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { tdcid } = req.body;
+
+    if (!username || !setTokenkey || !tdcid) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+      }
+
+      const sqlQuery = "UPDATE ticketdetailschatnote SET active = 'N' WHERE tdcid = $1";
+      const queryParams = [tdcid];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorDelete || "Error deleting ticket details chat note",
+            err
+          );
+        }
+        return SendCreate(
+          res,
+          200,
+          "Deleted",
+          SMessage.Delete || "Delete Success"
+        );
+      });
+
+      //this is save log
+      const savelog = await TicketController.saveLogsystem(
+        username,
+        "Ticket Detail Chat Note Deleted",
+        `ID: ${tdcid}`
+      );
+    } catch (error) {
+      console.log(error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
+   static async deleteticketdetailschatnoteAdmin(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { tdcid } = req.body;
+
+    if (!username || !setTokenkey || !tdcid) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+      }
+
+      const sqlQuery = "UPDATE ticketdetailschatnote SET active = 'N' WHERE tdcid = $1";
+      const queryParams = [tdcid];
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorDelete || "Error deleting ticket details chat note",
+            err
+          );
+        }
+        return SendCreate(
+          res,
+          200,
+          "Deleted",
+          SMessage.Delete || "Delete Success"
+        );
+      });
+
+      //this is save log
+      const savelog = await TicketController.saveLogsystem(
+        username,
+        "Ticket Detail Chat Note Deleted",
+        `ID: ${tdcid}`
+      );
+    } catch (error) {
+      console.log(error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
 }
