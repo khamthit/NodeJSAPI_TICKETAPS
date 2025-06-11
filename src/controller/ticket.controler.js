@@ -180,7 +180,9 @@ export default class TicketController {
       if (isNaN(page) || page < 1) page = 1;
       if (isNaN(limit) || limit < 1) limit = 10;
 
-      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+        username
+      );
       if (!tokenkey) {
         return SendError(
           res,
@@ -429,7 +431,9 @@ export default class TicketController {
       );
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+        username
+      );
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -451,17 +455,17 @@ export default class TicketController {
 
       if (req.files && req.files.fileattach) {
         const imageFile = req.files.fileattach; // imageFile is the uploaded file object
-          const uploadedImageUrl = await UploadImageToServer(imageFile);
-          if (!uploadedImageUrl) {
-            // If a file was provided but upload failed, it's an error.
-            return SendError400(
-              res,
-              EMessage.ErrorUploadImage + " - File upload failed."
-            );
-          }
-          image_url = uploadedImageUrl;
-          console.log("Image URL after upload:", req.files); // Debugging log
-      }      
+        const uploadedImageUrl = await UploadImageToServer(imageFile);
+        if (!uploadedImageUrl) {
+          // If a file was provided but upload failed, it's an error.
+          return SendError400(
+            res,
+            EMessage.ErrorUploadImage + " - File upload failed."
+          );
+        }
+        image_url = uploadedImageUrl;
+        console.log("Image URL after upload:", req.files); // Debugging log
+      }
 
       const validationErrors = ValidateData({ subject, descriptions });
       if (validationErrors.length > 0) {
@@ -554,18 +558,14 @@ export default class TicketController {
         queryParamsForWhere.push(`%${searchtext}%`);
         placeholderIndexForWhere++;
       }
-      if (searchCategory) {
-        effectiveWhereClauses.push(
-          `categorycode ILIKE $${placeholderIndexForWhere}`
-        );
-        queryParamsForWhere.push(`%${searchCategory}%`);
+      if (searchStatus) { // Assuming searchStatus is for astid (status ID)
+        effectiveWhereClauses.push(`stid = $${placeholderIndexForWhere}`);
+        queryParamsForWhere.push(searchStatus);
         placeholderIndexForWhere++;
       }
-      if (searchStatus) {
-        effectiveWhereClauses.push(
-          `statusName ILIKE $${placeholderIndexForWhere}`
-        );
-        queryParamsForWhere.push(`%${searchStatus}%`);
+      if (searchCategory) { // Assuming searchStatus is for astid (status ID)
+        effectiveWhereClauses.push(`tcid = $${placeholderIndexForWhere}`);
+        queryParamsForWhere.push(searchCategory);
         placeholderIndexForWhere++;
       }
       if (searchStartdate && searchEnddate) {
@@ -648,6 +648,7 @@ export default class TicketController {
         }
       );
     } catch (error) {
+      console.log("Error in showticketDetails:", error);
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
@@ -660,9 +661,7 @@ export default class TicketController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUser(
-        username
-      );
+      const tokenkey = await TicketController.fetchTokenKeyForUser(username);
       if (!tokenkey) {
         return SendErrorTokenkey(
           res,
@@ -712,7 +711,16 @@ export default class TicketController {
 
   static async showticketDetailsByAirline(req, res) {
     const { username, setTokenkey } = req.query;
-    const { page = 1, limit = 10 } = req.query;
+    let {
+      // Changed to let for parsing
+      page = 1,
+      limit = 10,
+      searchtext = "",
+      searchStatus = "", // Assuming this corresponds to astid
+      searchCategory="",
+      searchStartdate = "",
+      searchEnddate = "",
+    } = req.query;
 
     if (!username || !setTokenkey) {
       return SendError400(res, "Missing username in query parameters");
@@ -737,31 +745,68 @@ export default class TicketController {
           "Token key mismatch"
         );
       }
+
+      page = parseInt(page, 10);
+      limit = parseInt(limit, 10);
+      if (isNaN(page) || page < 1) page = 1;
+      if (isNaN(limit) || limit < 1) limit = 10;
       const offset = (page - 1) * limit;
-      let sqlQuery = "";
-      const queryParams = [];
-      sqlQuery =
-        "SELECT * FROM vm_ticketdetails WHERE active = 'Y' and (createby = $1) order by createdate desc LIMIT $2 OFFSET $3";
-      queryParams.push(username, limit, offset);
-      connected.query(sqlQuery, queryParams, (err, result) => {
-        if (err) {
+      const selectFields = "*";
+      const fromTable = "vm_ticketdetails";
+      let effectiveWhereClauses = ["active = 'Y'"];
+      const queryParamsForWhere = []; // Parameters for the WHERE clause (used by both count and data queries)
+      let placeholderIndex = 1;
+  if (searchtext) {
+        effectiveWhereClauses.push(`(ticketcode ILIKE $${placeholderIndex} OR subject ILIKE $${placeholderIndex} OR email ILIKE $${placeholderIndex} OR categorycode ILIKE $${placeholderIndex} OR categoryname ILIKE $${placeholderIndex}  OR priorityname ILIKE $${placeholderIndex}  OR descriptions ILIKE $${placeholderIndex})`);
+        queryParamsForWhere.push(`%${searchtext}%`);
+        placeholderIndex++;
+      }
+      if (searchStatus) { // Assuming searchStatus is for astid (status ID)
+        effectiveWhereClauses.push(`stid = $${placeholderIndex}`);
+        queryParamsForWhere.push(searchStatus);
+        placeholderIndex++;
+      }
+      if (searchCategory) { // Assuming searchStatus is for astid (status ID)
+        effectiveWhereClauses.push(`tcid = $${placeholderIndex}`);
+        queryParamsForWhere.push(searchCategory);
+        placeholderIndex++;
+      }
+      if (searchStartdate && searchEnddate) {
+        effectiveWhereClauses.push(`createdate >= $${placeholderIndex}`);
+        queryParamsForWhere.push(searchStartdate);
+        placeholderIndex++;
+        effectiveWhereClauses.push(`createdate <= $${placeholderIndex}`);
+        queryParamsForWhere.push(searchEnddate + " " + "23:59:59.999999");
+        placeholderIndex++;
+      }   
+const whereClauseString = effectiveWhereClauses.join(" AND ");      
+      const countSql = `SELECT COUNT(*) AS total_count FROM ${fromTable} WHERE ${whereClauseString}`;
+      connected.query(countSql, queryParamsForWhere, (countErr, countResult) => {
+        if (countErr) {
+          console.error("Error fetching announcement count:", countErr);
           return SendError(
             res,
             500,
-            EMessage.NotFound || "Error fetching ticket details",
-            err
+            EMessage.ErrorSelect || "Error fetching announcement count",
+            countErr
           );
-        }
+        }        
+        const totalCount = parseInt(countResult.rows[0].total_count, 10);
+        const totalPages = Math.ceil(totalCount / limit);
+        if (page > totalPages) {
+             return SendSuccessDisplay(res, EMessage.NotFound, [], totalPages, totalCount);
+        }        
+        const dataSql = `SELECT ${selectFields} FROM ${fromTable} WHERE ${whereClauseString} ORDER BY createdate DESC LIMIT $${placeholderIndex} OFFSET $${placeholderIndex + 1}`;
+        const queryParamsForData = [...queryParamsForWhere, limit, offset];
 
-        if (!result.rows || result.rows.length === 0) {
-          return SendError(
-            res,
-            404,
-            EMessage.NotFound + " No ticket details found"
-          );
-        }
-        return SendSuccess(res, SMessage.SelectAll, result.rows);
+        connected.query(dataSql, queryParamsForData, (err, dataResult) => {
+          if (err) return SendError400(res, EMessage.ErrorSelect, err); 
+          return SendSuccessDisplay(res, SMessage.SelectAll, dataResult.rows, totalPages, totalCount);
+
+        });
       });
+
+
     } catch (error) {
       Console.log(error);
       return SendError(res, 500, EMessage.ServerError, error);
@@ -1204,7 +1249,9 @@ export default class TicketController {
       if (isNaN(page) || page < 1) page = 1;
       if (isNaN(limit) || limit < 1) limit = 10;
 
-      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+        username
+      );
       if (!tokenkey) {
         return SendError(
           res,
@@ -1290,7 +1337,9 @@ export default class TicketController {
     )
       return SendError400(res, "Missing username in query parameters");
 
-    const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+    const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+      username
+    );
     if (!tokenkey || setTokenkey !== tokenkey)
       return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
     try {
@@ -1313,10 +1362,12 @@ export default class TicketController {
         // Image Upload Handling
         let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
 
-      if (req.files && req.files.fileattach) {
-        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
-        console.log("Image file received:", imageFile); // Debugging log
-          const uploadedImageUrl = await UploadImageTicketChatNoteToServer(imageFile);
+        if (req.files && req.files.fileattach) {
+          const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+          console.log("Image file received:", imageFile); // Debugging log
+          const uploadedImageUrl = await UploadImageTicketChatNoteToServer(
+            imageFile
+          );
           if (!uploadedImageUrl) {
             // If a file was provided but upload failed, it's an error.
             return SendError400(
@@ -1326,8 +1377,8 @@ export default class TicketController {
           }
           image_url = uploadedImageUrl;
           console.log("Image URL after upload:", imageFile); // Debugging log
-      }  
-      console.log("Image URL:", req.files);
+        }
+        console.log("Image URL:", req.files);
 
         sqlQuery =
           "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile, typesent) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, 'AIRLINE') RETURNING tdcid";
@@ -1408,10 +1459,12 @@ export default class TicketController {
         // Image Upload Handling
         let image_url = ""; // Initialize image_url, it will be empty if no file or upload fails (if handled that way)
 
-      if (req.files && req.files.fileattach) {
-        const imageFile = req.files.fileattach; // imageFile is the uploaded file object
-        console.log("Image file received:", imageFile); // Debugging log
-          const uploadedImageUrl = await UploadImageTicketChatNoteToServer(imageFile);
+        if (req.files && req.files.fileattach) {
+          const imageFile = req.files.fileattach; // imageFile is the uploaded file object
+          console.log("Image file received:", imageFile); // Debugging log
+          const uploadedImageUrl = await UploadImageTicketChatNoteToServer(
+            imageFile
+          );
           if (!uploadedImageUrl) {
             // If a file was provided but upload failed, it's an error.
             return SendError400(
@@ -1421,8 +1474,8 @@ export default class TicketController {
           }
           image_url = uploadedImageUrl;
           console.log("Image URL after upload:", imageFile); // Debugging log
-      }  
-      console.log("Image URL:", req.files);
+        }
+        console.log("Image URL:", req.files);
 
         sqlQuery =
           "INSERT INTO ticketdetailschatnote (tcddid, ticketcode, typenote, notedescription, createdate, createby, active, attachfile, typesent) VALUES ($1, $2, $3, $4, NOW(), $5, 'Y', $6, 'ADMIN') RETURNING tdcid";
@@ -1462,7 +1515,7 @@ export default class TicketController {
 
   static async showticketdetailschatnote(req, res) {
     const { username, setTokenkey } = req.query;
-    const {ticketcode = "" } = req.query;
+    const { ticketcode = "" } = req.query;
 
     if (!username || !setTokenkey)
       return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
@@ -1499,7 +1552,9 @@ export default class TicketController {
     if (!username || !setTokenkey)
       return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+        username
+      );
       if (!tokenkey || setTokenkey !== tokenkey)
         return SendErrorTokenkey(res, 401, EMessage.Unauthorized);
       const sqlQuery =
@@ -1532,7 +1587,9 @@ export default class TicketController {
       return SendError400(res, "Missing username in query parameters");
     }
     try {
-      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(
+        username
+      );
       if (!tokenkey) {
         return SendError(
           res,
@@ -1546,7 +1603,8 @@ export default class TicketController {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 
-      const sqlQuery = "UPDATE ticketdetailschatnote SET active = 'N' WHERE tdcid = $1";
+      const sqlQuery =
+        "UPDATE ticketdetailschatnote SET active = 'N' WHERE tdcid = $1";
       const queryParams = [tdcid];
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
@@ -1577,7 +1635,7 @@ export default class TicketController {
     }
   }
 
-   static async deleteticketdetailschatnoteAdmin(req, res) {
+  static async deleteticketdetailschatnoteAdmin(req, res) {
     const { username, setTokenkey } = req.query;
     const { tdcid } = req.body;
 
@@ -1599,7 +1657,8 @@ export default class TicketController {
         return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
       }
 
-      const sqlQuery = "UPDATE ticketdetailschatnote SET active = 'N' WHERE tdcid = $1";
+      const sqlQuery =
+        "UPDATE ticketdetailschatnote SET active = 'N' WHERE tdcid = $1";
       const queryParams = [tdcid];
       connected.query(sqlQuery, queryParams, (err, result) => {
         if (err) {
@@ -1629,5 +1688,4 @@ export default class TicketController {
       return SendError(res, 500, EMessage.ServerError, error);
     }
   }
-
 }
