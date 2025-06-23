@@ -41,6 +41,7 @@ router.post("/TicketCategory/UpdateTicketCategory", TicketController.updateTicke
 router.post("/TicketCategory/DeleteTicketCategory", TicketController.deleteTicketCategory);
 router.post("/Ticket/NewticketDetails", TicketController.createticketdetail);
 router.post("/Ticket/UpdateStatusTicketDetails", TicketController.ticketchangestatus);
+router.post("/Ticket/UpdateStatusTicketDetailsbyAirline", TicketController.ticketchangestatusbyAirline);
 router.post("/Ticket/TicketDetailsReassign", TicketController.ticketdetailsreassign);
 router.post("/Ticket/OpenImage", TicketController.openImage);
 router.post("/Ticket/NewStatus", TicketController.createsystemstatus);

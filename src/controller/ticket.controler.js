@@ -868,6 +868,61 @@ const whereClauseString = effectiveWhereClauses.join(" AND ");
     }
   }
 
+  static async ticketchangestatusbyAirline(req, res) {
+    const { username, setTokenkey } = req.query;
+    const { ticket_code, stid, workernoted } = req.body;
+
+    if (!username || !setTokenkey || !ticket_code || !stid) {
+      return SendError400(res, "Missing username in query parameters");
+    }
+
+    try {
+      const tokenkey = await TicketController.fetchTokenKeyForUserAirLine(username);
+      if (!tokenkey) {
+        return SendError(
+          res,
+          401,
+          EMessage.Unauthorized,
+          "Token key not found or invalid for user"
+        );
+      }
+
+      if (setTokenkey !== tokenkey) {
+        return SendError(res, 401, EMessage.Unauthorized, "Token key mismatch");
+      }
+      let sqlQuery = "";
+      sqlQuery =
+        "UPDATE ticketdetails SET stid = $1, workerby = $2, workernote = $3, workerend = Now() WHERE ticket_code = $4";
+
+      const queryParams = [
+        stid.trim(),
+        username.trim(),
+        workernoted.trim(),
+        ticket_code.trim(),
+      ];
+
+      connected.query(sqlQuery, queryParams, (err, result) => {
+        if (err) {
+          return SendError(
+            res,
+            500,
+            EMessage.ErrorUpdate || "Error updating ticket status",
+            err
+          );
+        }
+        return SendCreate(
+          res,
+          200,
+          "Updated",
+          SMessage.Update || "Update Success"
+        );
+      });
+    } catch (error) {
+      //console.error("Error in ticketchangestatus:", error);
+      return SendError(res, 500, EMessage.ServerError, error);
+    }
+  }
+
   static async ticketdetailsreassign(req, res) {
     const { username, setTokenkey } = req.query;
     const { ticket_code, reassignto, reassingnote } = req.body;
